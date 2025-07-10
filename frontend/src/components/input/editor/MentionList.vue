@@ -7,7 +7,7 @@
         :key="index"
         @click="selectItem(index)"
       >
-        {{ item }}
+        {{ item.name || item.username }}
       </button>
     </template>
     <div class="item" v-else>
@@ -16,7 +16,7 @@
   </div>
 </template>
 
-<script>
+<script lang="js">
 export default {
   props: {
     items: {
@@ -75,7 +75,7 @@ export default {
     },
 
     selectItem(index) {
-      const item = this.items[index]
+      const item = this.items[index].username
 
       if (item) {
         this.command({ id: item })
@@ -88,6 +88,11 @@ export default {
 <style lang="scss">
 /* Dropdown menu */
 .dropdown-menu {
+  --gray-1: rgba(61, 37, 20, .05);
+  --gray-2: #e0e0e0;
+  --gray-3: rgba(61, 37, 20, .12);
+  --white: #ffffff;
+  --shadow: 0 0 0 1px rgba(0, 0, 0, 0.05), 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
   background: var(--white);
   border: 1px solid var(--gray-1);
   border-radius: 0.7rem;
@@ -106,6 +111,9 @@ export default {
     gap: 0.25rem;
     text-align: left;
     width: 100%;
+    border-radius: 0.4rem;
+    border: none;
+    padding-block: 0.2rem;
 
     &:hover,
     &:hover.is-selected {

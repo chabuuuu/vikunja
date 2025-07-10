@@ -9,7 +9,8 @@ export default {
   items: async ({ query }) => {
     const userService = new UserService()
     const users = await userService.getAll(new UserModel, {s: query})
-    return users.map(user => user.username)
+    // console.log('users: ', users)
+    return users
   },
 
   render: () => {

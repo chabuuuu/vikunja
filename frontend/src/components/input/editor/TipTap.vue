@@ -1012,4 +1012,20 @@ ul.tiptap__editor-actions {
 		text-decoration: underline;
 	}
 }
+
+.tiptap {
+  :first-child {
+    margin-top: 0;
+  }
+
+  .mention {
+	--purple-light: #eae5ff;
+	--purple: #8b5cf6;
+    background-color: var(--purple-light);
+    border-radius: 0.4rem;
+    box-decoration-break: clone;
+    color: var(--purple);
+    padding: 0.1rem 0.3rem;
+  }
+}
 </style>
