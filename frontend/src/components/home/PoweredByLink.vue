@@ -1,16 +1,17 @@
 <template>
+	<BaseButton
+		class="menu-bottom-link"
+		:href="computedUrl"
+		target="_blank"
+	>
+		EV PMIS
+	</BaseButton>
 </template>
 
 <script setup lang="ts">
-import {computed} from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
-import {POWERED_BY as poweredByUrl} from '@/urls'
 
-const props = defineProps<{
-	utmMedium: string;
-}>()
-
-const computedUrl = computed(() => `${poweredByUrl}&utm_medium=${props.utmMedium}`)
+const computedUrl = 'https://envietgroup.com/'
 </script>
 
 <style lang="scss">
