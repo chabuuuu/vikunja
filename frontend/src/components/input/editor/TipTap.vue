@@ -1,153 +1,88 @@
 <template>
-	<div
-		ref="tiptapInstanceRef"
-		class="tiptap"
-	>
-		<EditorToolbar
-			v-if="editor && isEditing"
-			:editor="editor"
-			@imageUploadClicked="triggerImageInput"
-		/>
-		<BubbleMenu
-			v-if="editor && isEditing"
-			:editor="editor"
-			class="editor-bubble__wrapper"
-		>
-			<BaseButton
-				v-tooltip="$t('input.editor.bold')"
-				class="editor-bubble__button"
+	<div ref="tiptapInstanceRef" class="tiptap">
+		<EditorToolbar v-if="editor && isEditing" :editor="editor" @imageUploadClicked="triggerImageInput" />
+		<BubbleMenu v-if="editor && isEditing" :editor="editor" class="editor-bubble__wrapper">
+			<BaseButton v-tooltip="$t('input.editor.bold')" class="editor-bubble__button"
 				:class="{ 'is-active': editor.isActive('bold') }"
-				@click="() => editor?.chain().focus().toggleBold().run()"
-			>
+				@click="() => editor?.chain().focus().toggleBold().run()">
 				<Icon :icon="['fa', 'fa-bold']" />
 			</BaseButton>
-			<BaseButton
-				v-tooltip="$t('input.editor.italic')"
-				class="editor-bubble__button"
+			<BaseButton v-tooltip="$t('input.editor.italic')" class="editor-bubble__button"
 				:class="{ 'is-active': editor.isActive('italic') }"
-				@click="() => editor?.chain().focus().toggleItalic().run()"
-			>
+				@click="() => editor?.chain().focus().toggleItalic().run()">
 				<Icon :icon="['fa', 'fa-italic']" />
 			</BaseButton>
-			<BaseButton
-				v-tooltip="$t('input.editor.underline')"
-				class="editor-bubble__button"
+			<BaseButton v-tooltip="$t('input.editor.underline')" class="editor-bubble__button"
 				:class="{ 'is-active': editor.isActive('underline') }"
-				@click="() => editor?.chain().focus().toggleUnderline().run()"
-			>
+				@click="() => editor?.chain().focus().toggleUnderline().run()">
 				<Icon :icon="['fa', 'fa-underline']" />
 			</BaseButton>
-			<BaseButton
-				v-tooltip="$t('input.editor.strikethrough')"
-				class="editor-bubble__button"
+			<BaseButton v-tooltip="$t('input.editor.strikethrough')" class="editor-bubble__button"
 				:class="{ 'is-active': editor.isActive('strike') }"
-				@click="() => editor?.chain().focus().toggleStrike().run()"
-			>
+				@click="() => editor?.chain().focus().toggleStrike().run()">
 				<Icon :icon="['fa', 'fa-strikethrough']" />
 			</BaseButton>
-			<BaseButton
-				v-tooltip="$t('input.editor.code')"
-				class="editor-bubble__button"
+			<BaseButton v-tooltip="$t('input.editor.code')" class="editor-bubble__button"
 				:class="{ 'is-active': editor.isActive('code') }"
-				@click="() => editor?.chain().focus().toggleCode().run()"
-			>
+				@click="() => editor?.chain().focus().toggleCode().run()">
 				<Icon :icon="['fa', 'fa-code']" />
 			</BaseButton>
-			<BaseButton
-				v-tooltip="$t('input.editor.link')"
-				class="editor-bubble__button"
-				:class="{ 'is-active': editor.isActive('link') }"
-				@click="setLink"
-			>
+			<BaseButton v-tooltip="$t('input.editor.link')" class="editor-bubble__button"
+				:class="{ 'is-active': editor.isActive('link') }" @click="setLink">
 				<Icon :icon="['fa', 'fa-link']" />
 			</BaseButton>
 		</BubbleMenu>
 
-		<EditorContent
-			class="tiptap__editor"
-			:class="{'tiptap__editor-is-edit-enabled': isEditing}"
-			:editor="editor"
-			@dblclick="setEditIfApplicable()"
-			@click="focusIfEditing()"
-		/>
+		<EditorContent class="tiptap__editor" :class="{ 'tiptap__editor-is-edit-enabled': isEditing }" :editor="editor"
+			@dblclick="setEditIfApplicable()" @click="focusIfEditing()" />
 
-		<input
-			v-if="isEditing"
-			id="tiptap__image-upload"
-			ref="uploadInputRef"
-			type="file"
-			class="is-hidden"
-			@change="addImage"
-		>
+		<input v-if="isEditing" id="tiptap__image-upload" ref="uploadInputRef" type="file" class="is-hidden"
+			@change="addImage">
 
-		<ul
-			v-if="bottomActions.length === 0 && !isEditing && isEditEnabled"
-			class="tiptap__editor-actions d-print-none"
-		>
+		<ul v-if="bottomActions.length === 0 && !isEditing && isEditEnabled"
+			class="tiptap__editor-actions d-print-none">
 			<li>
-				<BaseButton
-					class="done-edit"
-					@click="() => setEdit()"
-				>
+				<BaseButton class="done-edit" @click="() => setEdit()">
 					{{ $t('input.editor.edit') }}
 				</BaseButton>
 			</li>
 		</ul>
-		<ul
-			v-if="bottomActions.length > 0"
-			class="tiptap__editor-actions d-print-none"
-		>
+		<ul v-if="bottomActions.length > 0" class="tiptap__editor-actions d-print-none">
 			<li v-if="isEditing && showSave">
-				<BaseButton
-					class="done-edit"
-					@click="bubbleSave"
-				>
+				<BaseButton class="done-edit" @click="bubbleSave">
 					{{ $t('misc.save') }}
 				</BaseButton>
 			</li>
 			<li v-if="!isEditing">
-				<BaseButton
-					class="done-edit"
-					@click="() => setEdit()"
-				>
+				<BaseButton class="done-edit" @click="() => setEdit()">
 					{{ $t('input.editor.edit') }}
 				</BaseButton>
 			</li>
-			<li
-				v-for="(action, k) in bottomActions"
-				:key="k"
-			>
+			<li v-for="(action, k) in bottomActions" :key="k">
 				<BaseButton @click="action.action">
 					{{ action.title }}
 				</BaseButton>
 			</li>
 		</ul>
-		<XButton
-			v-else-if="isEditing && showSave"
-			v-cy="'saveEditor'"
-			class="mt-4"
-			variant="secondary"
-			:shadow="false"
-			:disabled="!contentHasChanged"
-			@click="bubbleSave"
-		>
+		<XButton v-else-if="isEditing && showSave" v-cy="'saveEditor'" class="mt-4" variant="secondary" :shadow="false"
+			:disabled="!contentHasChanged" @click="bubbleSave">
 			{{ $t('misc.save') }}
 		</XButton>
 	</div>
 </template>
 
 <script setup lang="ts">
-import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
-import {useI18n} from 'vue-i18n'
-import {eventToHotkeyString} from '@github/hotkey'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { eventToHotkeyString } from '@github/hotkey'
 
 import EditorToolbar from './EditorToolbar.vue'
 
 import StarterKit from '@tiptap/starter-kit'
-import {Extension, mergeAttributes} from '@tiptap/core'
-import {BubbleMenu, EditorContent, type Extensions, useEditor} from '@tiptap/vue-3'
-import {Plugin, PluginKey} from '@tiptap/pm/state'
-import {marked} from 'marked'
+import { Extension, mergeAttributes } from '@tiptap/core'
+import { BubbleMenu, EditorContent, type Extensions, useEditor } from '@tiptap/vue-3'
+import { Plugin, PluginKey } from '@tiptap/pm/state'
+import { marked } from 'marked'
 
 import Link from '@tiptap/extension-link'
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
@@ -158,30 +93,33 @@ import TableRow from '@tiptap/extension-table-row'
 import Typography from '@tiptap/extension-typography'
 import Image from '@tiptap/extension-image'
 import Underline from '@tiptap/extension-underline'
-import {Placeholder} from '@tiptap/extension-placeholder'
+import { Placeholder } from '@tiptap/extension-placeholder'
 
 import TaskItem from '@tiptap/extension-task-item'
 import TaskList from '@tiptap/extension-task-list'
 import HardBreak from '@tiptap/extension-hard-break'
 
-import {Node} from '@tiptap/pm/model'
+import { Node } from '@tiptap/pm/model'
 
 import Commands from './commands'
 import suggestionSetup from './suggestion'
 
-import {common, createLowlight} from 'lowlight'
+import { common, createLowlight } from 'lowlight'
 
-import type {BottomAction, UploadCallback} from './types'
-import type {ITask} from '@/modelTypes/ITask'
-import type {IAttachment} from '@/modelTypes/IAttachment'
+import type { BottomAction, UploadCallback } from './types'
+import type { ITask } from '@/modelTypes/ITask'
+import type { IAttachment } from '@/modelTypes/IAttachment'
 import AttachmentModel from '@/models/attachment'
 import AttachmentService from '@/services/attachment'
 import BaseButton from '@/components/base/BaseButton.vue'
 import XButton from '@/components/input/Button.vue'
 
-import {isEditorContentEmpty} from '@/helpers/editorContentEmpty'
+import { isEditorContentEmpty } from '@/helpers/editorContentEmpty'
 import inputPrompt from '@/helpers/inputPrompt'
-import {setLinkInEditor} from '@/components/input/editor/setLinkInEditor'
+import { setLinkInEditor } from '@/components/input/editor/setLinkInEditor'
+
+import Mention from '@tiptap/extension-mention'
+import mentionSuggestion from './mention-suggestion'
 
 const props = withDefaults(defineProps<{
 	modelValue: string,
@@ -206,7 +144,7 @@ const emit = defineEmits(['update:modelValue', 'save'])
 
 const tiptapInstanceRef = ref<HTMLInputElement | null>(null)
 
-const {t} = useI18n()
+const { t } = useI18n()
 
 const CustomTableCell = TableCell.extend({
 	addAttributes() {
@@ -254,7 +192,7 @@ const CustomImage = Image.extend({
 			},
 		}
 	},
-	renderHTML({HTMLAttributes}) {
+	renderHTML({ HTMLAttributes }) {
 		if (HTMLAttributes.src?.startsWith(window.API_URL) || HTMLAttributes['data-src']?.startsWith(window.API_URL)) {
 			const imageUrl = HTMLAttributes['data-src'] ?? HTMLAttributes.src
 
@@ -273,7 +211,7 @@ const CustomImage = Image.extend({
 
 				if (typeof loadedAttachments.value[cacheKey] === 'undefined') {
 
-					const attachment = new AttachmentModel({taskId: taskId, id: attachmentId})
+					const attachment = new AttachmentModel({ taskId: taskId, id: attachmentId })
 
 					const attachmentService = new AttachmentService()
 					loadedAttachments.value[cacheKey] = await attachmentService.getBlobUrl(attachment)
@@ -349,7 +287,7 @@ const PasteHandler = Extension.create({
 				key: new PluginKey('pasteHandler'),
 				props: {
 					handlePaste: (view, event) => {
-						
+
 						// Handle images pasted from clipboard
 						if (typeof props.uploadCallback !== 'undefined' && event.clipboardData?.items?.length > 0) {
 
@@ -363,7 +301,7 @@ const PasteHandler = Extension.create({
 								}
 							}
 						}
-						
+
 						const text = event.clipboardData?.getData('text/plain') || ''
 						if (!text) {
 							return false
@@ -386,7 +324,7 @@ const PasteHandler = Extension.create({
 })
 
 
-const extensions : Extensions = [
+const extensions: Extensions = [
 	// Starterkit:
 	StarterKit.configure({
 		codeBlock: false,
@@ -411,7 +349,7 @@ const extensions : Extensions = [
 	}),
 
 	Placeholder.configure({
-		placeholder: ({editor}) => {
+		placeholder: ({ editor }) => {
 			if (!isEditing.value) {
 				return ''
 			}
@@ -459,7 +397,7 @@ const extensions : Extensions = [
 
 			editor.value!.state.doc.descendants((subnode, pos) => {
 				if (subnode === node) {
-					const {tr} = editor.value!.state
+					const { tr } = editor.value!.state
 					tr.setNodeMarkup(pos, undefined, {
 						...node.attrs,
 						checked,
@@ -479,6 +417,13 @@ const extensions : Extensions = [
 	}),
 
 	PasteHandler,
+	
+	Mention.configure({
+		HTMLAttributes: {
+			class: 'mention'
+		},
+		suggestion: mentionSuggestion,
+	})
 ]
 
 // Add a custom extension for the Escape key
@@ -511,7 +456,7 @@ watch(
 	() => {
 		editor.value?.setEditable(isEditing.value)
 	},
-	{immediate: true},
+	{ immediate: true },
 )
 
 watch(
@@ -525,7 +470,7 @@ watch(
 
 		setModeAndValue(value)
 	},
-	{immediate: true},
+	{ immediate: true },
 )
 
 function bubbleNow() {
@@ -589,14 +534,14 @@ function uploadAndInsertFiles(files: File[] | FileList) {
 			editor.value
 				?.chain()
 				.focus()
-				.setImage({src: url})
+				.setImage({ src: url })
 				.run()
 		})
-		
+
 		const html = editor.value?.getHTML().replace(UPLOAD_PLACEHOLDER_ELEMENT, '') ?? ''
-		
+
 		editor.value?.commands.setContent(html, false)
-		
+
 		bubbleSave()
 	})
 }
@@ -627,7 +572,7 @@ async function addImage(event) {
 	const url = await inputPrompt(event.target.getBoundingClientRect())
 
 	if (url) {
-		editor.value?.chain().focus().setImage({src: url}).run()
+		editor.value?.chain().focus().setImage({ src: url }).run()
 		bubbleSave()
 	}
 }
@@ -739,7 +684,7 @@ watch(
 			check.children[1].addEventListener('click', clickTasklistCheckbox)
 		})
 	},
-	{immediate: true},
+	{ immediate: true },
 )
 </script>
 
@@ -747,7 +692,7 @@ watch(
 .tiptap__editor {
 	transition: box-shadow $transition;
 	border-radius: $radius;
-	
+
 	&.tiptap__editor-is-edit-enabled {
 		min-height: 10rem;
 
@@ -755,11 +700,12 @@ watch(
 			padding: .5rem;
 		}
 
-		&:focus-within, &:focus {
+		&:focus-within,
+		&:focus {
 			box-shadow: 0 0 0 2px hsla(var(--primary-hsl), 0.5);
 		}
 
-		ul[data-type='taskList'] li > div {
+		ul[data-type='taskList'] li>div {
 			cursor: text;
 		}
 	}
@@ -777,11 +723,12 @@ watch(
 .ProseMirror {
 	padding: .5rem .5rem .5rem 0;
 
-	&:focus-within, &:focus {
+	&:focus-within,
+	&:focus {
 		box-shadow: none;
 	}
 
-	> * + * {
+	>*+* {
 		margin-top: 0.75em;
 	}
 
@@ -912,7 +859,7 @@ watch(
 			box-sizing: border-box;
 			position: relative;
 
-			> * {
+			>* {
 				margin-bottom: 0;
 			}
 		}
@@ -990,13 +937,13 @@ ul[data-type='taskList'] {
 		display: flex;
 		margin-top: 0.25rem;
 
-		> label {
+		>label {
 			flex: 0 0 auto;
 			margin-right: 0.5rem;
 			user-select: none;
 		}
 
-		> div {
+		>div {
 			flex: 1 1 auto;
 			cursor: pointer;
 		}
@@ -1052,7 +999,8 @@ ul.tiptap__editor-actions {
 		}
 	}
 
-	&, a {
+	&,
+	a {
 		color: var(--grey-500);
 
 		&.done-edit {
@@ -1063,5 +1011,21 @@ ul.tiptap__editor-actions {
 	a:hover {
 		text-decoration: underline;
 	}
+}
+
+.tiptap {
+  :first-child {
+    margin-top: 0;
+  }
+
+  .mention {
+	--purple-light: #eae5ff;
+	--purple: #8b5cf6;
+    background-color: var(--purple-light);
+    border-radius: 0.4rem;
+    box-decoration-break: clone;
+    color: var(--purple);
+    padding: 0.1rem 0.3rem;
+  }
 }
 </style>
