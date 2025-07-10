@@ -1,11 +1,4 @@
 <template>
-	<BaseButton
-		class="menu-bottom-link"
-		:href="computedUrl"
-		target="_blank"
-	>
-		{{ $t('misc.poweredBy') }}
-	</BaseButton>
 </template>
 
 <script setup lang="ts">
