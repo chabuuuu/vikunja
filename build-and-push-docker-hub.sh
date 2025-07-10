@@ -12,7 +12,7 @@ echo "Nhập tag cho image (ví dụ: latest hoặc v1.0.0):"
 read TAG
 
 # Tên đầy đủ của image
-IMAGE_NAME="hieukhnt2022/vmm-b2c-rag:$TAG"
+IMAGE_NAME="haphuthinh/vikunja-ev:$TAG"
 
 # # Đăng nhập vào Docker Hub
 # echo "Đăng nhập vào Docker Hub..."
