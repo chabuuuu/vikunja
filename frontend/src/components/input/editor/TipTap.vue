@@ -1,71 +1,136 @@
 <template>
-	<div ref="tiptapInstanceRef" class="tiptap">
-		<EditorToolbar v-if="editor && isEditing" :editor="editor" @imageUploadClicked="triggerImageInput" />
-		<BubbleMenu v-if="editor && isEditing" :editor="editor" class="editor-bubble__wrapper">
-			<BaseButton v-tooltip="$t('input.editor.bold')" class="editor-bubble__button"
+	<div
+		ref="tiptapInstanceRef"
+		class="tiptap"
+	>
+		<EditorToolbar
+			v-if="editor && isEditing"
+			:editor="editor"
+			@imageUploadClicked="triggerImageInput"
+		/>
+		<BubbleMenu
+			v-if="editor && isEditing"
+			:editor="editor"
+			class="editor-bubble__wrapper"
+		>
+			<BaseButton
+				v-tooltip="$t('input.editor.bold')"
+				class="editor-bubble__button"
 				:class="{ 'is-active': editor.isActive('bold') }"
-				@click="() => editor?.chain().focus().toggleBold().run()">
+				@click="() => editor?.chain().focus().toggleBold().run()"
+			>
 				<Icon :icon="['fa', 'fa-bold']" />
 			</BaseButton>
-			<BaseButton v-tooltip="$t('input.editor.italic')" class="editor-bubble__button"
+			<BaseButton
+				v-tooltip="$t('input.editor.italic')"
+				class="editor-bubble__button"
 				:class="{ 'is-active': editor.isActive('italic') }"
-				@click="() => editor?.chain().focus().toggleItalic().run()">
+				@click="() => editor?.chain().focus().toggleItalic().run()"
+			>
 				<Icon :icon="['fa', 'fa-italic']" />
 			</BaseButton>
-			<BaseButton v-tooltip="$t('input.editor.underline')" class="editor-bubble__button"
+			<BaseButton
+				v-tooltip="$t('input.editor.underline')"
+				class="editor-bubble__button"
 				:class="{ 'is-active': editor.isActive('underline') }"
-				@click="() => editor?.chain().focus().toggleUnderline().run()">
+				@click="() => editor?.chain().focus().toggleUnderline().run()"
+			>
 				<Icon :icon="['fa', 'fa-underline']" />
 			</BaseButton>
-			<BaseButton v-tooltip="$t('input.editor.strikethrough')" class="editor-bubble__button"
+			<BaseButton
+				v-tooltip="$t('input.editor.strikethrough')"
+				class="editor-bubble__button"
 				:class="{ 'is-active': editor.isActive('strike') }"
-				@click="() => editor?.chain().focus().toggleStrike().run()">
+				@click="() => editor?.chain().focus().toggleStrike().run()"
+			>
 				<Icon :icon="['fa', 'fa-strikethrough']" />
 			</BaseButton>
-			<BaseButton v-tooltip="$t('input.editor.code')" class="editor-bubble__button"
+			<BaseButton
+				v-tooltip="$t('input.editor.code')"
+				class="editor-bubble__button"
 				:class="{ 'is-active': editor.isActive('code') }"
-				@click="() => editor?.chain().focus().toggleCode().run()">
+				@click="() => editor?.chain().focus().toggleCode().run()"
+			>
 				<Icon :icon="['fa', 'fa-code']" />
 			</BaseButton>
-			<BaseButton v-tooltip="$t('input.editor.link')" class="editor-bubble__button"
-				:class="{ 'is-active': editor.isActive('link') }" @click="setLink">
+			<BaseButton
+				v-tooltip="$t('input.editor.link')"
+				class="editor-bubble__button"
+				:class="{ 'is-active': editor.isActive('link') }"
+				@click="setLink"
+			>
 				<Icon :icon="['fa', 'fa-link']" />
 			</BaseButton>
 		</BubbleMenu>
 
-		<EditorContent class="tiptap__editor" :class="{ 'tiptap__editor-is-edit-enabled': isEditing }" :editor="editor"
-			@dblclick="setEditIfApplicable()" @click="focusIfEditing()" />
+		<EditorContent
+			class="tiptap__editor"
+			:class="{ 'tiptap__editor-is-edit-enabled': isEditing }"
+			:editor="editor"
+			@dblclick="setEditIfApplicable()"
+			@click="focusIfEditing()"
+		/>
 
-		<input v-if="isEditing" id="tiptap__image-upload" ref="uploadInputRef" type="file" class="is-hidden"
-			@change="addImage">
+		<input
+			v-if="isEditing"
+			id="tiptap__image-upload"
+			ref="uploadInputRef"
+			type="file"
+			class="is-hidden"
+			@change="addImage"
+		>
 
-		<ul v-if="bottomActions.length === 0 && !isEditing && isEditEnabled"
-			class="tiptap__editor-actions d-print-none">
+		<ul
+			v-if="bottomActions.length === 0 && !isEditing && isEditEnabled"
+			class="tiptap__editor-actions d-print-none"
+		>
 			<li>
-				<BaseButton class="done-edit" @click="() => setEdit()">
+				<BaseButton
+					class="done-edit"
+					@click="() => setEdit()"
+				>
 					{{ $t('input.editor.edit') }}
 				</BaseButton>
 			</li>
 		</ul>
-		<ul v-if="bottomActions.length > 0" class="tiptap__editor-actions d-print-none">
+		<ul
+			v-if="bottomActions.length > 0"
+			class="tiptap__editor-actions d-print-none"
+		>
 			<li v-if="isEditing && showSave">
-				<BaseButton class="done-edit" @click="bubbleSave">
+				<BaseButton
+					class="done-edit"
+					@click="bubbleSave"
+				>
 					{{ $t('misc.save') }}
 				</BaseButton>
 			</li>
 			<li v-if="!isEditing">
-				<BaseButton class="done-edit" @click="() => setEdit()">
+				<BaseButton
+					class="done-edit"
+					@click="() => setEdit()"
+				>
 					{{ $t('input.editor.edit') }}
 				</BaseButton>
 			</li>
-			<li v-for="(action, k) in bottomActions" :key="k">
+			<li
+				v-for="(action, k) in bottomActions"
+				:key="k"
+			>
 				<BaseButton @click="action.action">
 					{{ action.title }}
 				</BaseButton>
 			</li>
 		</ul>
-		<XButton v-else-if="isEditing && showSave" v-cy="'saveEditor'" class="mt-4" variant="secondary" :shadow="false"
-			:disabled="!contentHasChanged" @click="bubbleSave">
+		<XButton
+			v-else-if="isEditing && showSave"
+			v-cy="'saveEditor'"
+			class="mt-4"
+			variant="secondary"
+			:shadow="false"
+			:disabled="!contentHasChanged"
+			@click="bubbleSave"
+		>
 			{{ $t('misc.save') }}
 		</XButton>
 	</div>
@@ -420,10 +485,10 @@ const extensions: Extensions = [
 	
 	Mention.configure({
 		HTMLAttributes: {
-			class: 'mention'
+			class: 'mention',
 		},
 		suggestion: mentionSuggestion,
-	})
+	}),
 ]
 
 // Add a custom extension for the Escape key
