@@ -13,47 +13,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Login to GHCR
-        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3
-        with:
-          username: ${{ secrets.DOCKER_HUB_USERNAME }}
-          password: ${{ secrets.DOCKER_HUB_PASSWORD }}
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3
-        with:
-          version: latest
-      - name: Docker meta version
-        if: ${{ github.ref_type == 'tag' }}
-        id: meta
-        uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5
-        with:
-          images: |
-            vikunja/vikunja
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=raw,value=latest
-      - name: Build and push unstable
-        if: ${{ github.ref_type != 'tag' }}
-        uses: useblacksmith/build-push-action@574eb0ee0b59c6a687ace24192f0727dfb65d6d7 # v1
-        with:
-          platforms: linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64/v8
-          push: true
-          tags: vikunja/vikunja:unstable
-          build-args: |
-            RELEASE_VERSION=${{ github.ref_name }}-${{ github.sha }}
-      - name: Build and push version
-        if: ${{ github.ref_type == 'tag' }}
-        uses: useblacksmith/build-push-action@574eb0ee0b59c6a687ace24192f0727dfb65d6d7 # v1
-        with:
-          platforms: linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64/v8
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            RELEASE_VERSION=${{ github.ref_name }}-${{ github.sha }}
+      # Checkout code from the repository
+      - name: Checkout code
+        uses: actions/checkout@v3
 
+      # Log in to Docker Hub
+      - name: Log in to Docker Hub
+        run: echo "${{ secrets.DOCKER_HUB_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_HUB_USERNAME }}" --password-stdin
 
+      # Build Docker image and push to Docker Hub
+      - name: Build Docker image
+        run: docker build -t $IMAGE_NAME .
+
+      # Push Docker image to Docker Hub
+      - name: Push Docker image to Docker Hub
+        run: docker push $IMAGE_NAME
