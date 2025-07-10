@@ -13,9 +13,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Git describe
-        id: ghd
-        uses: proudust/gh-describe@v2
       - name: Login to GHCR
         uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3
         with:
@@ -47,7 +44,7 @@ jobs:
           push: true
           tags: vikunja/vikunja:unstable
           build-args: |
-            RELEASE_VERSION=${{ steps.ghd.outputs.describe }}
+            RELEASE_VERSION=${{ github.ref_name }}-${{ github.sha }}
       - name: Build and push version
         if: ${{ github.ref_type == 'tag' }}
         uses: useblacksmith/build-push-action@574eb0ee0b59c6a687ace24192f0727dfb65d6d7 # v1
@@ -57,6 +54,6 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            RELEASE_VERSION=${{ steps.ghd.outputs.describe }}
+            RELEASE_VERSION=${{ github.ref_name }}-${{ github.sha }}
 
 
