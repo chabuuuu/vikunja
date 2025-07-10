@@ -20,7 +20,7 @@ IMAGE_NAME="haphuthinh/vikunja-ev:$TAG"
 
 # Build Docker image
 echo "Building Docker image $IMAGE_NAME..."
-sudo docker build -t "$IMAGE_NAME" .
+sudo docker build --build-arg BUILDPLATFORM=linux/amd64 --build-arg RELEASE_VERSION=$TAG -t "$IMAGE_NAME" .
 
 # Push Docker image lên Docker Hub
 echo "Pushing Docker image to Docker Hub..."
