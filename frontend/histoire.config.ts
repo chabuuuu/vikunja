@@ -17,7 +17,7 @@ export default defineConfig({
 		}),
 	],
 	theme: {
-		title: 'Vikunja',
+		title: 'EV PMIS',
 		colors: {
 			// https://histoire.dev/guide/config.html#builtin-colors
 			gray: defaultColors.zinc,
@@ -28,7 +28,7 @@ export default defineConfig({
 		// 	light: './img/light.png',
 		// 	dark: './img/dark.png',
 		// },
-		logoHref: 'https://vikunja.io',
+		logoHref: 'https://envietgroup.com/',
 		// favicon: './favicon.ico',
 	},
 })
