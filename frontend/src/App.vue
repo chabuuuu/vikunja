@@ -19,6 +19,7 @@
 			<UpdateNotification />
 			<Notification />
 			<DemoMode />
+			<ChatOverlay />
 		</Teleport>
 	</Ready>
 </template>
@@ -48,6 +49,7 @@ import {useColorScheme} from '@/composables/useColorScheme'
 import {useBodyClass} from '@/composables/useBodyClass'
 import AddToHomeScreen from '@/components/home/AddToHomeScreen.vue'
 import DemoMode from '@/components/home/DemoMode.vue'
+import ChatOverlay from '@/components/chat/ChatOverlay.vue'
 
 const importAccountDeleteService = () => import('@/services/accountDelete')
 import {success} from '@/message'
