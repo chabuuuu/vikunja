@@ -9,69 +9,41 @@
 			:title="title"
 		>
 			<form @submit.prevent="save()">
-				<div class="field">
-					<label
-						class="label"
-						for="teamtext"
-					>{{ $t('team.attributes.name') }}</label>
-					<div class="control">
-						<input
-							id="teamtext"
-							v-model="team.name"
-							v-focus
-							:class="{ disabled: teamMemberService.loading }"
-							:disabled="teamMemberService.loading || undefined"
-							class="input"
-							:placeholder="$t('team.attributes.namePlaceholder')"
-							type="text"
-						>
-					</div>
-				</div>
-				<p
-					v-if="showErrorTeamnameRequired && team.name === ''"
-					class="help is-danger"
-				>
-					{{ $t('team.attributes.nameRequired') }}
-				</p>
-				<div
+				<FormField
+					id="teamtext"
+					v-model="team.name"
+					v-focus
+					:label="$t('team.attributes.name')"
+					:disabled="teamMemberService.loading"
+					:loading="teamMemberService.loading"
+					:placeholder="$t('team.attributes.namePlaceholder')"
+					type="text"
+					:error="showErrorTeamnameRequired && team.name === '' ? $t('team.attributes.nameRequired') : null"
+				/>
+				<FormField
 					v-if="configStore.publicTeamsEnabled"
-					class="field"
+					:label="$t('team.attributes.isPublic')"
 				>
-					<label
-						class="label"
-						for="teamIsPublic"
-					>{{ $t('team.attributes.isPublic') }}</label>
-					<div
-						class="control is-expanded"
-						:class="{ 'is-loading': teamService.loading }"
+					<FancyCheckbox
+						v-model="team.isPublic"
+						:disabled="teamMemberService.loading || undefined"
+						:class="{ 'disabled': teamService.loading }"
 					>
-						<FancyCheckbox
-							v-model="team.isPublic"
-							:disabled="teamMemberService.loading || undefined"
-							:class="{ 'disabled': teamService.loading }"
-						>
-							{{ $t('team.attributes.isPublicDescription') }}
-						</FancyCheckbox>
-					</div>
-				</div>
-				<div class="field">
-					<label
-						class="label"
-						for="teamdescription"
-					>{{ $t('team.attributes.description') }}</label>
-					<div class="control">
-						<Editor
-							id="teamdescription"
-							v-model="team.description"
-							:class="{ disabled: teamService.loading }"
-							:disabled="teamService.loading"
-							:placeholder="$t('team.attributes.descriptionPlaceholder')"
-						/>
-					</div>
-				</div>
+						{{ $t('team.attributes.isPublicDescription') }}
+					</FancyCheckbox>
+				</FormField>
+				<FormField :label="$t('team.attributes.description')">
+					<Editor
+						id="teamdescription"
+						v-model="team.description"
+						:class="{ disabled: teamService.loading }"
+						:disabled="teamService.loading"
+						:placeholder="$t('team.attributes.descriptionPlaceholder')"
+					/>
+				</FormField>
 			</form>
 
-			<div class="field has-addons mt-4">
+			<div class="field has-addons mbs-4">
 				<div class="control is-fullwidth">
 					<XButton
 						:loading="teamService.loading"
@@ -84,7 +56,7 @@
 				<div class="control">
 					<XButton
 						:loading="teamService.loading"
-						class="is-danger"
+						danger
 						icon="trash-alt"
 						@click="showDeleteModal = true"
 					/>
@@ -176,7 +148,7 @@
 							<XButton
 								v-if="m.id !== userInfo.id"
 								:loading="teamMemberService.loading"
-								class="mr-2"
+								class="mie-2"
 								@click="() => toggleUserType(m)"
 							>
 								{{ m.admin ? $t('team.edit.makeMember') : $t('team.edit.makeAdmin') }}
@@ -184,7 +156,7 @@
 							<XButton
 								v-if="m.id !== userInfo.id"
 								:loading="teamMemberService.loading"
-								class="is-danger"
+								danger
 								icon="trash-alt"
 								@click="() => {memberToDelete = m; showUserDeleteModal = true}"
 							/>
@@ -265,6 +237,7 @@ import {useRoute, useRouter} from 'vue-router'
 
 import Editor from '@/components/input/AsyncEditor'
 import FancyCheckbox from '@/components/input/FancyCheckbox.vue'
+import FormField from '@/components/input/FormField.vue'
 import Multiselect from '@/components/input/Multiselect.vue'
 import User from '@/components/misc/User.vue'
 
@@ -272,7 +245,7 @@ import TeamService from '@/services/team'
 import TeamMemberService from '@/services/teamMember'
 import UserService from '@/services/user'
 
-import {RIGHTS as Rights} from '@/constants/rights'
+import {PERMISSIONS as Permissions} from '@/constants/permissions'
 
 import {useTitle} from '@/composables/useTitle'
 import {success} from '@/message'
@@ -292,8 +265,8 @@ const {t} = useI18n({useScope: 'global'})
 const userIsAdmin = computed(() => {
 	return (
 		team.value &&
-		team.value.maxRight &&
-		team.value.maxRight > Rights.READ
+		team.value.maxPermission &&
+		team.value.maxPermission > Permissions.READ
 	)
 })
 const userInfo = computed(() => authStore.info)
@@ -413,7 +386,7 @@ async function leave() {
 
 <style lang="scss" scoped>
 .card.is-fullwidth {
-	margin-bottom: 1rem;
+	margin-block-end: 1rem;
 
 	.content {
 		padding: 0;

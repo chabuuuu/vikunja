@@ -11,6 +11,50 @@ The project consists of:
 - `desktop/` – Electron wrapper application
 - `docs/` – Documentation website
 
+## Plans and Worktrees
+
+When the user asks you to create a plan to fix or implement something:
+
+- ALWAYS write that plan to the plans/ directory on the root of the repo.
+- NEVER commit plans to git
+- Give the plan a descriptive name using kebab-case (e.g., `fix-position-healing.md`, `feat-new-feature.md`)
+
+### Preparing a Worktree for Implementation
+
+When the user tells you to prepare a worktree for a plan, use the mage command to set up an isolated workspace:
+
+```bash
+mage dev:prepare-worktree <name> <plan-path>
+```
+
+**Arguments:**
+- `<name>` - Required. Becomes both the folder name and branch name. Use conventions like `fix-<description>` for bug fixes or `feat-<description>` for new features.
+- `<plan-path>` - Required. Path to a plan file (relative to repo root) that will be copied to the new worktree's `plans/` directory. Pass `""` to skip copying a plan.
+
+This will initialize a new worktree in the parent directory and copy some files over.
+
+**Example:**
+```bash
+# Create worktree for a bug fix with a plan
+mage dev:prepare-worktree fix-position-healing plans/fix-position-healing.md
+
+# Create worktree for a new feature without a plan
+mage dev:prepare-worktree feat-dark-mode ""
+```
+
+**Result:**
+```
+parent-directory/
+├── main/                    # Original workspace
+├── fix-position-healing/    # New worktree
+│   ├── config.yml           # With updated rootpath
+│   └── plans/
+│       └── fix-position-healing.md
+└── ...
+```
+
+After creation, tell the user where they can find the new worktree.
+
 ## Development Commands
 
 ### Backend (Go)
@@ -26,23 +70,31 @@ The project consists of:
 - **Clean**: `mage build:clean` - Cleans build artifacts
 - **Format**: `mage fmt` - Format Go code before committing
 
+**IMPORTANT:** To run api tests, you MUST use the `mage test:web`, or `mage test:feature` or `mage test:filter` commands. Using plain `go test` will not work!
+
+**Go Tips:**
+- To see source files from a dependency, or to answer questions about a dependency, run `go mod download -json MODULE` and use the returned `Dir` path to read the files.
+- Use `go doc foo.Bar` or `go doc -all foo` to read documentation for packages, types, functions, etc.
+
 -Development helpers under the `dev` namespace:
 - **Migration**: `mage dev:make-migration <StructName>` - Creates new database migration. If you omit `<StructName>`, the command will prompt for it.
 - **Event**: `mage dev:make-event` - Create an event type
-- **Listener**: `mage dev:make-listener` - Create an event listener  
+- **Listener**: `mage dev:make-listener` - Create an event listener
 - **Notification**: `mage dev:make-notification` - Create a notification skeleton
+- **Prepare Worktree**: `mage dev:prepare-worktree <name> <plan-path>` - Creates a new git worktree in `../` with the given name as folder and branch. Copies a plan file if provided (pass `""` to skip). Copies `config.yml` with updated rootpath and initializes the frontend.
 
 ### Frontend (Vue.js)
 Navigate to `frontend/` directory:
-- **Dev Server**: `pnpm dev` - Starts development server
+- **Dev Server**: `pnpm dev` - Starts development server, running on port 4173 unless changed with the `--port` flag
 - **Build**: `pnpm build` - Production build
 - **Build Dev**: `pnpm build:dev` - Development build  
 - **Lint**: `pnpm lint` - ESLint check
 - **Lint Fix**: `pnpm lint:fix` - ESLint with auto-fix
+- **Lint Styles**: `pnpm lint:styles` - Stylelint check for CSS/SCSS
+- **Lint Styles Fix**: `pnpm lint:styles:fix` - Stylelint with auto-fix
 - **Type Check**: `pnpm typecheck` - Vue TypeScript checking
 - **Test Unit**: `pnpm test:unit` - Vitest unit tests
-- **Test E2E**: `pnpm test:e2e` - Cypress end-to-end tests
-- **Test E2E Dev**: `pnpm test:e2e-dev` - Interactive Cypress testing
+- **Test E2E**: `pnpm test:e2e` - Playwright end-to-end tests (located in `tests/e2e/`)
 
 ### Pre-commit Checks
 Always run both lint before committing:
@@ -51,12 +103,12 @@ Always run both lint before committing:
 mage lint:fix
 
 # Frontend  
-cd frontend && pnpm lint:fix
+cd frontend && pnpm lint:fix && pnpm lint:styles:fix
 ```
 
 Fix any errors the lint commands report, then try comitting again.
 
-You only need to run the lint for the backend when changing backend code, and the lint for the frontend only when changing frontend code.
+You only need to run the lint for the backend when changing backend code, and the lint for the frontend only when changing frontend code. Similarly, only run style linting when modifying CSS/SCSS files or Vue component styles.
 
 ## Architecture Overview
 
@@ -71,7 +123,7 @@ The Go backend follows a layered architecture with clear separation of concerns:
 
 **Key Patterns:**
 - **Generic CRUD**: Models implement `CRUDable` interface for standardized database operations
-- **Rights System**: Three-tier permissions (Read/Write/Admin) enforced across all operations
+- **Permissions System**: Three-tier permissions (Read/Write/Admin) enforced across all operations
 - **Event-Driven**: Event system for notifications, webhooks, and cross-cutting concerns
 - **Modular Design**: Pluggable authentication, avatar providers, migration tools
 
@@ -113,7 +165,7 @@ Modern Vue 3 composition API application with TypeScript:
 ### Adding New Features
 
 **Backend Changes:**
-1. Create/modify models in `pkg/models/` with proper CRUD and Rights interfaces as required
+1. Create/modify models in `pkg/models/` with proper CRUD and Permissions interfaces as required
 2. Add database migration if needed: `mage dev:make-migration <StructName>`
 3. Create/update services in `pkg/services/` for complex business logic
 4. Add API routes in `pkg/routes/api/v1/` following existing patterns
@@ -135,12 +187,12 @@ Modern Vue 3 composition API application with TypeScript:
 ### API Development
 - All API endpoints follow RESTful conventions under `/api/v1/`
 - Use generic web handlers in `pkg/web/handler/` for standard CRUD operations
-- Implement proper rights checking using the Rights interface
+- Implement proper permissions checking using the Permissions interface
 - Add Swagger annotations for automatic documentation generation
 
 ### Testing
 - Backend: Feature tests alongside source files, web tests in `pkg/webtests/`
-- Frontend: Unit tests with Vitest, E2E tests with Cypress
+- Frontend: Unit tests with Vitest, E2E tests with Playwright
 - Always test both positive and negative authorization scenarios
 - Use test fixtures in `pkg/db/fixtures/` for consistent test data
 
@@ -154,9 +206,7 @@ Use the **Conventional Commits** style when committing changes (for example, `fe
 
 ## Frontend Development Guidelines
 
-The web client lives in `frontend/` and uses Vue.js 3 in combination with TypeScript.
-
-Check the `frontend/.editorconfig` file and obey the formatting rules outlined there.
+The web client lives in `frontend/` and uses Vue 3 + TypeScript. ESLint rules enforce: single quotes, trailing commas, no semicolons, tab indent, Vue <script lang="ts">, PascalCase component names, camelCase events. See `frontend/eslint.config.js` and `frontend/.editorconfig` and obey formatting rules outlined there.
 
 ## Translations
 
@@ -175,8 +225,8 @@ After adjusting the source string, you need to call the respective translation l
 - Use `pkg/config/` for configuration management
 
 **Code Style:**
-- Go: Standard Go formatting with golangci-lint
-- Vue: ESLint with TypeScript and Vue-specific rules
+- Go: golangci-lint per `.golangci.yml`; use goimports; wrap errors with `fmt.Errorf("...: %w", err)`; enforce permissions checks in models; never log secrets; do not edit generated `pkg/swagger/*`
+- Vue: ESLint + TS; single quotes, trailing commas, no semicolons, tab indent; script setup + lang ts; keep services/models in sync with backend
 - Follow existing patterns for consistency
 
 **Naming Conventions:**
@@ -184,16 +234,16 @@ After adjusting the source string, you need to call the respective translation l
 - Vue: PascalCase for components, camelCase for composables
 - API endpoints: kebab-case in URLs, camelCase in JSON
 
-**Rights and Permissions:**
-- Always implement Rights interface for new models
+**Permissions and Permissions:**
+- Always implement Permissions interface for new models
 - Use `CanRead`, `CanWrite`, `CanCreate`, `CanDelete` methods
-- Rights are enforced at the model level, not just routes
+- Permissions are enforced at the model level, not just routes
 
 ## Common Gotchas
 
 - Database migrations are irreversible in production - test thoroughly
 - Frontend services must match backend model structure exactly
-- Rights checking is mandatory for all CRUD operations
+- Permissions checking is mandatory for all CRUD operations
 - Event listeners in `pkg/*/listeners.go` must be registered properly
 - CORS settings in backend must allow frontend domain
 - API tokens have different scopes - check permissions carefully

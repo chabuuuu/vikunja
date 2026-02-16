@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import ApiTokenService from '@/services/apiToken'
 import {computed, onMounted, ref} from 'vue'
+import {useRoute} from 'vue-router'
+import {parseScopesFromQuery} from '@/helpers/parseScopesFromQuery'
 import {useFlatpickrLanguage} from '@/helpers/useFlatpickrLanguage'
-import {formatDateShort, formatDateSince} from '@/helpers/time/formatDate'
+import {formatDateSince, formatDisplayDate} from '@/helpers/time/formatDate'
 import XButton from '@/components/input/Button.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import ApiTokenModel from '@/models/apiTokenModel'
@@ -12,6 +14,7 @@ import flatPickr from 'vue-flatpickr-component'
 import 'flatpickr/dist/flatpickr.css'
 import {useI18n} from 'vue-i18n'
 import Message from '@/components/misc/Message.vue'
+import FormField from '@/components/input/FormField.vue'
 import type {IApiToken} from '@/modelTypes/IApiToken'
 
 const service = new ApiTokenService()
@@ -33,6 +36,8 @@ const showDeleteModal = ref<boolean>(false)
 const tokenToDelete = ref<IApiToken>()
 
 const {t} = useI18n()
+
+const route = useRoute()
 
 const now = new Date()
 
@@ -56,10 +61,13 @@ onMounted(async () => {
 	keys.forEach(key => {
 		routesAvailable[key] = allRoutes[key]
 	})
-	
+
 	availableRoutes.value = routesAvailable
-	
+
 	resetPermissions()
+
+	// Apply query parameters if present
+	applyQueryParams()
 })
 
 function resetPermissions() {
@@ -71,6 +79,38 @@ function resetPermissions() {
 			newTokenPermissions.value[group][r] = false
 		})
 	})
+}
+
+function applyQueryParams() {
+	// Normalize query params - they can be string, string[], or null
+	const titleParam = Array.isArray(route.query.title) ? route.query.title[0] : route.query.title
+	const scopesParam = Array.isArray(route.query.scopes) ? route.query.scopes[0] : route.query.scopes
+
+	if (titleParam || scopesParam) {
+		showCreateForm.value = true
+	}
+
+	if (titleParam) {
+		newToken.value.title = titleParam
+		newTokenTitleValid.value = true
+	}
+
+	if (scopesParam) {
+		const requestedScopes = parseScopesFromQuery(scopesParam)
+
+		// Apply requested scopes to the permissions checkboxes
+		for (const [group, permissions] of Object.entries(requestedScopes)) {
+			if (newTokenPermissions.value[group]) {
+				for (const permission of permissions) {
+					if (newTokenPermissions.value[group][permission] !== undefined) {
+						newTokenPermissions.value[group][permission] = true
+					}
+				}
+				// Update group checkbox if all permissions in group are selected
+				toggleGroupPermissionsFromChild(group, true)
+			}
+		}
+	}
 }
 
 async function deleteToken() {
@@ -162,7 +202,7 @@ function toggleGroupPermissionsFromChild(group: string, checked: boolean) {
 	<Card :title="$t('user.settings.apiTokens.title')">
 		<Message
 			v-if="tokenCreatedSuccessMessage !== ''"
-			class="has-text-centered mb-4"
+			class="has-text-centered mbe-4"
 		>
 			{{ tokenCreatedSuccessMessage }}<br>
 			{{ $t('user.settings.apiTokens.tokenCreatedNotSeeAgain') }}
@@ -186,7 +226,7 @@ function toggleGroupPermissionsFromChild(group: string, checked: boolean) {
 				<th>{{ $t('user.settings.apiTokens.attributes.permissions') }}</th>
 				<th>{{ $t('user.settings.apiTokens.attributes.expiresAt') }}</th>
 				<th>{{ $t('misc.created') }}</th>
-				<th class="has-text-right">
+				<th class="has-text-end">
 					{{ $t('misc.actions') }}
 				</th>
 			</tr>
@@ -207,7 +247,7 @@ function toggleGroupPermissionsFromChild(group: string, checked: boolean) {
 					</template>
 				</td>
 				<td>
-					{{ formatDateShort(tk.expiresAt) }}
+					{{ formatDisplayDate(tk.expiresAt) }}
 					<p
 						v-if="tk.expiresAt < new Date()"
 						class="has-text-danger"
@@ -215,8 +255,8 @@ function toggleGroupPermissionsFromChild(group: string, checked: boolean) {
 						{{ $t('user.settings.apiTokens.expired', {ago: formatDateSince(tk.expiresAt)}) }}
 					</p>
 				</td>
-				<td>{{ formatDateShort(tk.created) }}</td>
-				<td class="has-text-right">
+				<td>{{ formatDisplayDate(tk.created) }}</td>
+				<td class="has-text-end">
 					<XButton
 						variant="secondary"
 						@click="() => {tokenToDelete = tk; showDeleteModal = true}"
@@ -232,31 +272,18 @@ function toggleGroupPermissionsFromChild(group: string, checked: boolean) {
 			@submit.prevent="createToken"
 		>
 			<!-- Title -->
-			<div class="field">
-				<label
-					class="label"
-					for="apiTokenTitle"
-				>{{ $t('user.settings.apiTokens.attributes.title') }}</label>
-				<div class="control">
-					<input
-						id="apiTokenTitle"
-						ref="apiTokenTitle"
-						v-model="newToken.title"
-						v-focus
-						class="input"
-						type="text"
-						:placeholder="$t('user.settings.apiTokens.attributes.titlePlaceholder')"
-						@keyup="() => newTokenTitleValid = newToken.title !== ''"
-						@focusout="() => newTokenTitleValid = newToken.title !== ''"
-					>
-				</div>
-				<p
-					v-if="!newTokenTitleValid"
-					class="help is-danger"
-				>
-					{{ $t('user.settings.apiTokens.titleRequired') }}
-				</p>
-			</div>
+			<FormField
+				id="apiTokenTitle"
+				ref="apiTokenTitle"
+				v-model="newToken.title"
+				v-focus
+				:label="$t('user.settings.apiTokens.attributes.title')"
+				type="text"
+				:placeholder="$t('user.settings.apiTokens.attributes.titlePlaceholder')"
+				:error="newTokenTitleValid ? null : $t('user.settings.apiTokens.titleRequired')"
+				@keyup="() => newTokenTitleValid = newToken.title !== ''"
+				@focusout="() => newTokenTitleValid = newToken.title !== ''"
+			/>
 
 			<!-- Expiry -->
 			<div class="field">
@@ -290,7 +317,7 @@ function toggleGroupPermissionsFromChild(group: string, checked: boolean) {
 					<flat-pickr
 						v-if="newTokenExpiry === 'custom'"
 						v-model="newTokenExpiryCustom"
-						class="ml-2"
+						class="mis-2"
 						:config="flatPickerConfig"
 					/>
 				</div>
@@ -303,14 +330,14 @@ function toggleGroupPermissionsFromChild(group: string, checked: boolean) {
 				<div
 					v-for="(routes, group) in availableRoutes"
 					:key="group"
-					class="mb-2"
+					class="mbe-2"
 				>
 					<template
 						v-if="Object.keys(routes).length >= 1"
 					>
 						<FancyCheckbox
 							v-model="newTokenPermissionsGroup[group]"
-							class="mr-2 is-capitalized has-text-weight-bold"
+							class="mie-2 is-capitalized has-text-weight-bold"
 							@update:modelValue="checked => selectPermissionGroup(group, checked)"
 						>
 							{{ formatPermissionTitle(group) }}
@@ -318,15 +345,15 @@ function toggleGroupPermissionsFromChild(group: string, checked: boolean) {
 						<br>
 					</template>
 					<template
-						v-for="(paths, route) in routes"
-						:key="group+'-'+route"
+						v-for="(paths, permission) in routes"
+						:key="group+'-'+permission"
 					>
 						<FancyCheckbox
-							v-model="newTokenPermissions[group][route]"
-							class="ml-4 mr-2 is-capitalized"
+							v-model="newTokenPermissions[group][permission]"
+							class="mis-4 mie-2 is-capitalized"
 							@update:modelValue="checked => toggleGroupPermissionsFromChild(group, checked)"
 						>
-							{{ formatPermissionTitle(route) }}
+							{{ formatPermissionTitle(permission) }}
 						</FancyCheckbox>
 						<br>
 					</template>
@@ -350,7 +377,7 @@ function toggleGroupPermissionsFromChild(group: string, checked: boolean) {
 		<XButton
 			v-else
 			icon="plus"
-			class="mb-4"
+			class="mbe-4"
 			:loading="service.loading"
 			@click="() => showCreateForm = true"
 		>

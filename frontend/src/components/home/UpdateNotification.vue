@@ -23,7 +23,7 @@ import {useBaseStore} from '@/stores/base'
 const baseStore = useBaseStore()
 
 const updateAvailable = computed(() => baseStore.updateAvailable)
-const registration = ref(null)
+const registration = ref<ServiceWorkerRegistration | null>(null)
 const refreshing = ref(false)
 
 document.addEventListener('swUpdated', showRefreshUI, {once: true})
@@ -38,7 +38,8 @@ navigator?.serviceWorker?.addEventListener(
 
 function showRefreshUI(e: Event) {
 	console.log('recieved refresh event', e)
-	registration.value = e.detail
+	const customEvent = e as CustomEvent<ServiceWorkerRegistration>
+	registration.value = customEvent.detail
 	baseStore.setUpdateAvailable(true)
 }
 
@@ -59,9 +60,9 @@ function refreshApp() {
 	// at least define it centrally
 	// the highest z-index of a modal is .hint-modal with 4500
 	z-index: 5000;
-	bottom: 1rem;
+	inset-block-end: 1rem;
 	inset-inline: 1rem;
-	max-width: max-content;
+	max-inline-size: max-content;
 	margin-inline: auto;
 
 	display: flex;
@@ -76,7 +77,7 @@ function refreshApp() {
 }
 
 .update-notification__message {
-	width: 100%;
+	inline-size: 100%;
 	text-align: center;
 }
 </style>

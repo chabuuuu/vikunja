@@ -46,6 +46,7 @@ func TestTaskCollection_ReadAll(t *testing.T) {
 		OverdueTasksRemindersTime:    "09:00",
 		Created:                      testCreatedTime,
 		Updated:                      testUpdatedTime,
+		ExportFileID:                 1,
 	}
 	user2 := &user.User{
 		ID:                           2,
@@ -238,6 +239,7 @@ func TestTaskCollection_ReadAll(t *testing.T) {
 	task6 := &Task{
 		ID:           6,
 		Title:        "task #6 lower due date",
+		Description:  "This has something unique",
 		Identifier:   "test1-6",
 		Index:        6,
 		CreatedByID:  1,
@@ -500,7 +502,7 @@ func TestTaskCollection_ReadAll(t *testing.T) {
 	}
 	task28 := &Task{
 		ID:           28,
-		Title:        "task #28 with repeat after",
+		Title:        "task #28 with repeat after, start_date, end_date and due_date",
 		Identifier:   "test1-13",
 		Index:        13,
 		CreatedByID:  1,
@@ -510,6 +512,9 @@ func TestTaskCollection_ReadAll(t *testing.T) {
 		RepeatAfter:  3600,
 		Created:      time.Unix(1543626724, 0).In(loc),
 		Updated:      time.Unix(1543626724, 0).In(loc),
+		DueDate:      time.Unix(1543789524, 0).In(loc),
+		StartDate:    time.Unix(1543616724, 0).In(loc),
+		EndDate:      time.Unix(1544700000, 0).In(loc),
 	}
 	task29 := &Task{
 		ID:          29,
@@ -659,8 +664,8 @@ func TestTaskCollection_ReadAll(t *testing.T) {
 
 		Expand []TaskCollectionExpandable
 
-		CRUDable web.CRUDable
-		Rights   web.Rights
+		CRUDable    web.CRUDable
+		Permissions web.Permissions
 	}
 	type args struct {
 		search string
@@ -830,6 +835,7 @@ func TestTaskCollection_ReadAll(t *testing.T) {
 				task7,
 				task8,
 				task9,
+				task28,
 			},
 			wantErr: false,
 		},
@@ -842,6 +848,7 @@ func TestTaskCollection_ReadAll(t *testing.T) {
 			want: []*Task{
 				task8,
 				task9,
+				task28,
 			},
 			wantErr: false,
 		},
@@ -888,6 +895,7 @@ func TestTaskCollection_ReadAll(t *testing.T) {
 				task7,
 				task8,
 				task9,
+				task28,
 			},
 			wantErr: false,
 		},
@@ -1440,19 +1448,6 @@ func TestTaskCollection_ReadAll(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:   "search for task index",
-			fields: fields{},
-			args: args{
-				search: "number #17",
-				a:      &user.User{ID: 1},
-				page:   0,
-			},
-			want: []*Task{
-				task33, // has the index 17
-			},
-			wantErr: false,
-		},
-		{
 			name: "order by position",
 			fields: fields{
 				SortBy:        []string{"position", "id"},
@@ -1511,6 +1506,7 @@ func TestTaskCollection_ReadAll(t *testing.T) {
 				// The only tasks with a due date
 				task6,
 				task5,
+				task28,
 				// The other ones don't have a due date
 				task39,
 				task35,
@@ -1519,7 +1515,6 @@ func TestTaskCollection_ReadAll(t *testing.T) {
 				task31,
 				task30,
 				task29,
-				task28,
 				task27,
 				task26,
 				task25,
@@ -1561,6 +1556,7 @@ func TestTaskCollection_ReadAll(t *testing.T) {
 				task7,
 				task6,
 				task5,
+				task28,
 			},
 		},
 		{
@@ -1574,6 +1570,7 @@ func TestTaskCollection_ReadAll(t *testing.T) {
 				a: &user.User{ID: 1},
 			},
 			want: []*Task{
+				task28,
 				task5,
 				task6,
 				task7,
@@ -1594,6 +1591,7 @@ func TestTaskCollection_ReadAll(t *testing.T) {
 			want: []*Task{
 				task6,
 				task5,
+				task28,
 				task7,
 				task8,
 				task9,
@@ -1601,6 +1599,40 @@ func TestTaskCollection_ReadAll(t *testing.T) {
 		},
 		// TODO unix dates
 		// TODO date magic
+	}
+
+	// Here we're explicitly testing search with and without paradeDB. Both return different results but that's
+	// expected - paradeDB returns more results than other databases with a naive like-search.
+
+	if db.ParadeDBAvailable() {
+		tests = append(tests, testcase{
+			name:   "search for task index",
+			fields: fields{},
+			args: args{
+				search: "number #17",
+				a:      &user.User{ID: 1},
+				page:   0,
+			},
+			want: []*Task{
+				task17, // has the text #17 in the title
+				task33, // has the index 17
+			},
+			wantErr: false,
+		})
+	} else {
+		tests = append(tests, testcase{
+			name:   "search for task index",
+			fields: fields{},
+			args: args{
+				search: "number #17",
+				a:      &user.User{ID: 1},
+				page:   0,
+			},
+			want: []*Task{
+				task33, // has the index 17
+			},
+			wantErr: false,
+		})
 	}
 
 	for _, tt := range tests {
@@ -1621,15 +1653,15 @@ func TestTaskCollection_ReadAll(t *testing.T) {
 
 				Expand: tt.fields.Expand,
 
-				CRUDable: tt.fields.CRUDable,
-				Rights:   tt.fields.Rights,
+				CRUDable:    tt.fields.CRUDable,
+				Permissions: tt.fields.Permissions,
 			}
 			got, _, _, err := lt.ReadAll(s, tt.args.a, tt.args.search, tt.args.page, 50)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Test %s, Task.ReadAll() error = %v, wantErr %v", tt.name, err, tt.wantErr)
 				return
 			}
-			if diff, equal := messagediff.PrettyDiff(got, tt.want); !equal {
+			if diff, equal := messagediff.PrettyDiff(tt.want, got); !equal {
 				var is bool
 				var gotTasks []*Task
 				gotTasks, is = got.([]*Task)
@@ -1656,7 +1688,7 @@ func TestTaskCollection_ReadAll(t *testing.T) {
 					return gotIDs[i] < gotIDs[j]
 				})
 
-				diffIDs, _ := messagediff.PrettyDiff(gotIDs, wantIDs)
+				diffIDs, _ := messagediff.PrettyDiff(wantIDs, gotIDs)
 
 				t.Errorf("Test %s, Task.ReadAll() = %v, \nwant %v, \ndiff: %v \n\n diffIDs: %v", tt.name, got, tt.want, diff, diffIDs)
 			}

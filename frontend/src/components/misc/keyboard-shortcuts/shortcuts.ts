@@ -3,6 +3,7 @@ import type {RouteLocation} from 'vue-router'
 import {isAppleDevice} from '@/helpers/isAppleDevice'
 
 const ctrl = isAppleDevice() ? '⌘' : 'ctrl'
+const reminderModifier = isAppleDevice() ? 'shift' : 'alt'
 
 export interface Shortcut {
 	title: string
@@ -115,6 +116,36 @@ export const KEYBOARD_SHORTCUTS: ShortcutGroup[] = [
 		],
 	},
 	{
+		title: 'keyboardShortcuts.gantt.title',
+		available: (route) => route.name === 'project.view',
+		shortcuts: [
+			{
+				title: 'keyboardShortcuts.gantt.moveTaskLeft',
+				keys: ['←'],
+			},
+			{
+				title: 'keyboardShortcuts.gantt.moveTaskRight',
+				keys: ['→'],
+			},
+			{
+				title: 'keyboardShortcuts.gantt.expandTaskLeft',
+				keys: ['shift', '←'],
+			},
+			{
+				title: 'keyboardShortcuts.gantt.expandTaskRight',
+				keys: ['shift', '→'],
+			},
+			{
+				title: 'keyboardShortcuts.gantt.shrinkTaskLeft',
+				keys: [ctrl, '←'],
+			},
+			{
+				title: 'keyboardShortcuts.gantt.shrinkTaskRight',
+				keys: [ctrl, '→'],
+			},
+		],
+	},
+	{
 		title: 'keyboardShortcuts.task.title',
 		available: (route) => route.name === 'task.detail',
 		shortcuts: [
@@ -152,7 +183,7 @@ export const KEYBOARD_SHORTCUTS: ShortcutGroup[] = [
 			},
 			{
 				title: 'keyboardShortcuts.task.reminder',
-				keys: ['alt', 'r'],
+				keys: [reminderModifier, 'r'],
 			},
 			{
 				title: 'keyboardShortcuts.task.description',
@@ -177,6 +208,24 @@ export const KEYBOARD_SHORTCUTS: ShortcutGroup[] = [
 			{
 				title: 'keyboardShortcuts.task.save',
 				keys: [ctrl, 's'],
+			},
+			{
+				title: 'keyboardShortcuts.task.copyIdentifier',
+				keys: ['.'],
+			},
+			{
+				title: 'keyboardShortcuts.task.copyIdentifierAndTitle',
+				keys: ['.', '.'],
+				combination: 'then',
+			},
+			{
+				title: 'keyboardShortcuts.task.copyIdentifierTitleAndUrl',
+				keys: ['.', '.', '.'],
+				combination: 'then',
+			},
+			{
+				title: 'keyboardShortcuts.task.copyUrl',
+				keys: [ctrl, '.'],
 			},
 		],
 	},

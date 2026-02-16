@@ -24,10 +24,8 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"strconv"
 	"time"
 
-	"code.vikunja.io/api/pkg/config"
 	"code.vikunja.io/api/pkg/cron"
 	"code.vikunja.io/api/pkg/db"
 	"code.vikunja.io/api/pkg/files"
@@ -36,24 +34,17 @@ import (
 	"code.vikunja.io/api/pkg/user"
 	"code.vikunja.io/api/pkg/utils"
 	"code.vikunja.io/api/pkg/version"
+	"code.vikunja.io/api/pkg/web"
 
 	"xorm.io/xorm"
 )
 
 func ExportUserData(s *xorm.Session, u *user.User) (err error) {
-	exportDir := config.FilesBasePath.GetString() + "/user-export-tmp/"
-	err = os.MkdirAll(exportDir, 0700)
+	dumpFile, err := os.CreateTemp("", "vikunja-export-*.zip")
 	if err != nil {
-		return err
+		return fmt.Errorf("error creating temp file: %w", err)
 	}
-
-	tmpFilename := exportDir + strconv.FormatInt(u.ID, 10) + "_" + time.Now().Format("2006-01-02_15-03-05") + ".zip"
-
-	// Open zip
-	dumpFile, err := os.Create(tmpFilename)
-	if err != nil {
-		return fmt.Errorf("error opening dump file: %w", err)
-	}
+	tmpFilename := dumpFile.Name()
 	defer dumpFile.Close()
 
 	dumpWriter := zip.NewWriter(dumpFile)
@@ -127,6 +118,53 @@ func ExportUserData(s *xorm.Session, u *user.User) (err error) {
 	})
 }
 
+func getRawTasksForExport(s *xorm.Session, projectIDs []int64, a web.Auth) (tasks []*Task, err error) {
+	if len(projectIDs) == 0 {
+		return []*Task{}, nil
+	}
+
+	opts := &taskSearchOptions{
+		projectIDs: projectIDs,
+		page:       0,
+		perPage:    -1,
+		sortby: []*sortParam{{
+			sortBy:  taskPropertyID,
+			orderBy: orderAscending,
+		}},
+	}
+
+	hasFavoritesProject := false
+	for _, id := range projectIDs {
+		if id == FavoritesPseudoProject.ID {
+			hasFavoritesProject = true
+			break
+		}
+	}
+
+	var dbSearcher taskSearcher = &dbTaskSearcher{
+		s:                   s,
+		a:                   a,
+		hasFavoritesProject: hasFavoritesProject,
+	}
+
+	tasks, _, err = dbSearcher.Search(opts)
+	if err != nil {
+		return nil, err
+	}
+
+	taskMap := make(map[int64]*Task, len(tasks))
+	for _, t := range tasks {
+		taskMap[t.ID] = t
+	}
+
+	err = addMoreInfoToTasks(s, taskMap, a, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return tasks, nil
+}
+
 func exportProjectsAndTasks(s *xorm.Session, u *user.User, wr *zip.Writer) (taskIDs []int64, err error) {
 
 	// Get all projects
@@ -179,10 +217,7 @@ func exportProjectsAndTasks(s *xorm.Session, u *user.User, wr *zip.Writer) (task
 		viewIDs = append(viewIDs, v.ID)
 	}
 
-	tasks, _, _, err := getTasksForProjects(s, rawProjects, u, &taskSearchOptions{
-		page:    0,
-		perPage: -1,
-	}, nil)
+	tasks, err := getRawTasksForExport(s, projectIDs, u)
 	if err != nil {
 		return taskIDs, err
 	}

@@ -24,7 +24,7 @@
 							v-for="(value, text) in DATE_RANGES"
 							:key="text"
 							:class="{'is-active': from === value[0] && to === value[1]}"
-							@click="setDateRange(value)"
+							@click="setDateRange([...value])"
 						>
 							{{ $t(`input.datepickerRange.ranges.${text}`) }}
 						</BaseButton>
@@ -136,7 +136,7 @@ const flatPickerConfig = computed(() => ({
 	dateFormat: 'Y-m-d H:i',
 	enableTime: false,
 	wrap: true,
-	mode: 'range',
+	mode: 'range' as const,
 	locale: useFlatpickrLanguage().value,
 }))
 
@@ -150,8 +150,8 @@ const to = ref('')
 watch(
 	() => props.modelValue,
 	newValue => {
-		from.value = newValue.dateFrom
-		to.value = newValue.dateTo
+		from.value = typeof newValue.dateFrom === 'string' ? newValue.dateFrom : newValue.dateFrom.toISOString()
+		to.value = typeof newValue.dateTo === 'string' ? newValue.dateTo : newValue.dateTo.toISOString()
 		// Only set the date back to flatpickr when it's an actual date.
 		// Otherwise flatpickr runs in an endless loop and slows down the browser.
 		const dateFrom = parseDateOrString(from.value, false)
@@ -200,8 +200,8 @@ function setDateRange(range: string[] | null) {
 		return
 	}
 
-	from.value = range[0]
-	to.value = range[1]
+	from.value = range[0] ?? ''
+	to.value = range[1] ?? ''
 }
 
 const customRangeActive = computed<boolean>(() => {
@@ -227,22 +227,22 @@ const buttonText = computed<string>(() => {
 
 :deep(.popup) {
 	z-index: 10;
-	margin-top: 1rem;
+	margin-block-start: 1rem;
 	border-radius: $radius;
 	border: 1px solid var(--grey-200);
 	background-color: var(--white);
 	box-shadow: $shadow;
 
 	&.is-open {
-		width: 500px;
-		height: 320px;
+		inline-size: 500px;
+		block-size: 320px;
 	}
 }
 
 .datepicker-with-range {
 	display: flex;
-	width: 100%;
-	height: 100%;
+	inline-size: 100%;
+	block-size: 100%;
 	position: absolute;
 }
 
@@ -252,21 +252,21 @@ const buttonText = computed<string>(() => {
 }
 
 .flatpickr-container {
-	width: 70%;
-	border-left: 1px solid var(--grey-200);
+	inline-size: 70%;
+	border-inline-start: 1px solid var(--grey-200);
 	padding: 1rem;
 	font-size: .9rem;
 
 	// Flatpickr has no option to use it without an input field so we're hiding it instead
 	:deep(input.form-control.input) {
-		height: 0;
+		block-size: 0;
 		padding: 0;
 		border: 0;
 	}
 
 	.field .control :deep(.button) {
 		border: 1px solid var(--input-border-color);
-		height: 2.25rem;
+		block-size: 2.25rem;
 
 		&:hover {
 			border: 1px solid var(--input-hover-border-color);
@@ -279,16 +279,16 @@ const buttonText = computed<string>(() => {
 }
 
 .selections {
-	width: 30%;
+	inline-size: 30%;
 	display: flex;
 	flex-direction: column;
-	padding-top: .5rem;
+	padding-block-start: .5rem;
 	overflow-y: scroll;
 
 	button {
 		display: block;
-		width: 100%;
-		text-align: left;
+		inline-size: 100%;
+		text-align: start;
 		padding: .5rem 1rem;
 		transition: $transition;
 		font-size: .9rem;

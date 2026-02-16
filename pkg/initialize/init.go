@@ -21,6 +21,7 @@ import (
 
 	"code.vikunja.io/api/pkg/config"
 	"code.vikunja.io/api/pkg/cron"
+	"code.vikunja.io/api/pkg/db"
 	"code.vikunja.io/api/pkg/events"
 	"code.vikunja.io/api/pkg/files"
 	"code.vikunja.io/api/pkg/i18n"
@@ -32,6 +33,7 @@ import (
 	"code.vikunja.io/api/pkg/modules/auth/openid"
 	"code.vikunja.io/api/pkg/modules/keyvalue"
 	migrationHandler "code.vikunja.io/api/pkg/modules/migration/handler"
+	"code.vikunja.io/api/pkg/plugins"
 	"code.vikunja.io/api/pkg/red"
 	"code.vikunja.io/api/pkg/user"
 )
@@ -66,6 +68,11 @@ func InitEngines() {
 	if err != nil {
 		log.Fatal(err.Error())
 	}
+
+	err = db.CreateParadeDBIndexes()
+	if err != nil {
+		log.Fatal(err.Error())
+	}
 }
 
 // FullInitWithoutAsync does a full init without any async handlers (cron or events)
@@ -73,7 +80,10 @@ func FullInitWithoutAsync() {
 	LightInit()
 
 	// Initialize the files handler
-	files.InitFileHandler()
+	err := files.InitFileHandler()
+	if err != nil {
+		log.Fatalf("Could not init file handler: %s", err)
+	}
 
 	// Run the migrations
 	migration.Migrate(nil)
@@ -90,8 +100,17 @@ func FullInitWithoutAsync() {
 	// Connect to ldap if enabled
 	ldap.InitializeLDAPConnection()
 
+	// Check all OpenID Connect providers at startup
+	_, err = openid.GetAllProviders()
+	if err != nil {
+		log.Errorf("Error initializing OpenID Connect providers: %s", err)
+	}
+
 	// Load translations
 	i18n.Init()
+
+	// Initialize plugins
+	plugins.Initialize()
 }
 
 // FullInit initializes all kinds of things in the right order

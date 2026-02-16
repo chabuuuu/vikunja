@@ -288,23 +288,28 @@ func (vcls *VikunjaCaldavProjectStorage) CreateResource(rpath, content string) (
 
 	vTask, err := caldav.ParseTaskFromVTODO(content)
 	if err != nil {
+		log.Errorf("[CALDAV] Failed to parse VTODO in CreateResource: %v", err)
+		log.Debugf("[CALDAV] VTODO content that failed to parse: %s", content)
 		return nil, err
 	}
 
 	vTask.ProjectID = vcls.project.ID
 
-	// Check the rights
+	// Check the permissions
 	canCreate, err := vTask.CanCreate(s, vcls.user)
 	if err != nil {
+		log.Errorf("[CALDAV] Permission check failed in CreateResource for user %s, project %d: %v", vcls.user.Username, vcls.project.ID, err)
 		return nil, err
 	}
 	if !canCreate {
+		log.Warningf("[CALDAV] User %s does not have permission to create task in project %d", vcls.user.Username, vcls.project.ID)
 		return nil, errs.ForbiddenError
 	}
 
 	// Create the task
 	err = vTask.Create(s, vcls.user)
 	if err != nil {
+		log.Errorf("[CALDAV] Failed to create task in CreateResource: %v, task: %+v", err, vTask)
 		_ = s.Rollback()
 		return nil, err
 	}
@@ -312,6 +317,7 @@ func (vcls *VikunjaCaldavProjectStorage) CreateResource(rpath, content string) (
 	vcls.task.ID = vTask.ID
 	err = persistLabels(s, vcls.user, vcls.task, vTask.Labels)
 	if err != nil {
+		log.Errorf("[CALDAV] Failed to persist labels in CreateResource: %v, labels: %+v", err, vTask.Labels)
 		_ = s.Rollback()
 		return nil, err
 	}
@@ -319,11 +325,13 @@ func (vcls *VikunjaCaldavProjectStorage) CreateResource(rpath, content string) (
 	vcls.task.ProjectID = vcls.project.ID
 	err = persistRelations(s, vcls.user, vcls.task, vTask.RelatedTasks)
 	if err != nil {
+		log.Errorf("[CALDAV] Failed to persist relations in CreateResource: %v, relations: %+v", err, vTask.RelatedTasks)
 		_ = s.Rollback()
 		return nil, err
 	}
 
 	if err := s.Commit(); err != nil {
+		log.Errorf("[CALDAV] Failed to commit transaction in CreateResource: %v", err)
 		return nil, err
 	}
 
@@ -341,6 +349,8 @@ func (vcls *VikunjaCaldavProjectStorage) UpdateResource(rpath, content string) (
 
 	vTask, err := caldav.ParseTaskFromVTODO(content)
 	if err != nil {
+		log.Errorf("[CALDAV] Failed to parse VTODO in UpdateResource: %v", err)
+		log.Debugf("[CALDAV] VTODO content that failed to parse: %s", content)
 		return nil, err
 	}
 
@@ -354,13 +364,15 @@ func (vcls *VikunjaCaldavProjectStorage) UpdateResource(rpath, content string) (
 	s := db.NewSession()
 	defer s.Close()
 
-	// Check the rights
+	// Check the permissions
 	canUpdate, err := vTask.CanUpdate(s, vcls.user)
 	if err != nil {
+		log.Errorf("[CALDAV] Permission check failed in UpdateResource for user %s, task %d: %v", vcls.user.Username, vcls.task.ID, err)
 		_ = s.Rollback()
 		return nil, err
 	}
 	if !canUpdate {
+		log.Warningf("[CALDAV] User %s does not have permission to update task %d", vcls.user.Username, vcls.task.ID)
 		_ = s.Rollback()
 		return nil, errs.ForbiddenError
 	}
@@ -368,23 +380,27 @@ func (vcls *VikunjaCaldavProjectStorage) UpdateResource(rpath, content string) (
 	// Update the task
 	err = vTask.Update(s, vcls.user)
 	if err != nil {
+		log.Errorf("[CALDAV] Failed to update task in UpdateResource: %v, task: %+v", err, vTask)
 		_ = s.Rollback()
 		return nil, err
 	}
 
 	err = persistLabels(s, vcls.user, vcls.task, vTask.Labels)
 	if err != nil {
+		log.Errorf("[CALDAV] Failed to persist labels in UpdateResource: %v, labels: %+v", err, vTask.Labels)
 		_ = s.Rollback()
 		return nil, err
 	}
 
 	err = persistRelations(s, vcls.user, vcls.task, vTask.RelatedTasks)
 	if err != nil {
+		log.Errorf("[CALDAV] Failed to persist relations in UpdateResource: %v, relations: %+v", err, vTask.RelatedTasks)
 		_ = s.Rollback()
 		return nil, err
 	}
 
 	if err := s.Commit(); err != nil {
+		log.Errorf("[CALDAV] Failed to commit transaction in UpdateResource: %v", err)
 		return nil, err
 	}
 
@@ -403,7 +419,7 @@ func (vcls *VikunjaCaldavProjectStorage) DeleteResource(_ string) error {
 		s := db.NewSession()
 		defer s.Close()
 
-		// Check the rights
+		// Check the permissions
 		canDelete, err := vcls.task.CanDelete(s, vcls.user)
 		if err != nil {
 			_ = s.Rollback()
@@ -600,7 +616,7 @@ func (vlra *VikunjaProjectResourceAdapter) CalculateEtag() string {
 
 // GetContent returns the content string of a resource (a task in our case)
 func (vlra *VikunjaProjectResourceAdapter) GetContent() string {
-	if vlra.project != nil && vlra.project.Tasks != nil {
+	if vlra.project != nil && vlra.projectTasks != nil {
 		return caldav.GetCaldavTodosForTasks(vlra.project, vlra.projectTasks)
 	}
 

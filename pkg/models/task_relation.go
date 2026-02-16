@@ -20,12 +20,11 @@ import (
 	"time"
 
 	"code.vikunja.io/api/pkg/events"
+	"code.vikunja.io/api/pkg/user"
+	"code.vikunja.io/api/pkg/web"
 
 	"xorm.io/builder"
 	"xorm.io/xorm"
-
-	"code.vikunja.io/api/pkg/user"
-	"code.vikunja.io/api/pkg/web"
 )
 
 // RelationKind represents a kind of relation between to tasks
@@ -95,8 +94,8 @@ type TaskRelation struct {
 	// A timestamp when this label was created. You cannot change this value.
 	Created time.Time `xorm:"created not null" json:"created"`
 
-	web.CRUDable `xorm:"-" json:"-"`
-	web.Rights   `xorm:"-" json:"-"`
+	web.CRUDable    `xorm:"-" json:"-"`
+	web.Permissions `xorm:"-" json:"-"`
 }
 
 // TableName holds the table name for the task relation table
@@ -188,7 +187,7 @@ func checkTaskRelationCycle(s *xorm.Session, relation *TaskRelation, otherTaskID
 
 // Create creates a new task relation
 // @Summary Create a new relation between two tasks
-// @Description Creates a new relation between two tasks. The user needs to have update rights on the base task and at least read rights on the other task. Both tasks do not need to be on the same project. Take a look at the docs for available task relation kinds.
+// @Description Creates a new relation between two tasks. The user needs to have update permissions on the base task and at least read permissions on the other task. Both tasks do not need to be on the same project. Take a look at the docs for available task relation kinds.
 // @tags task
 // @Accept json
 // @Produce json
@@ -270,6 +269,31 @@ func (rel *TaskRelation) Create(s *xorm.Session, a web.Auth) error {
 	})
 }
 
+// ReadOne returns a task relation
+func (rel *TaskRelation) ReadOne(s *xorm.Session, _ web.Auth) (err error) {
+	exists, err := s.
+		Where("task_id = ? AND other_task_id = ? AND relation_kind = ?", rel.TaskID, rel.OtherTaskID, rel.RelationKind).
+		Get(rel)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return ErrRelationDoesNotExist{
+			TaskID:      rel.TaskID,
+			OtherTaskID: rel.OtherTaskID,
+			Kind:        rel.RelationKind,
+		}
+	}
+
+	// Get the creator
+	rel.CreatedBy, err = user.GetUserByID(s, rel.CreatedByID)
+	if err != nil && !user.IsErrUserDoesNotExist(err) {
+		return err
+	}
+
+	return nil
+}
+
 // Delete removes a task relation
 // @Summary Remove a task relation
 // @tags task
@@ -286,7 +310,13 @@ func (rel *TaskRelation) Create(s *xorm.Session, a web.Auth) error {
 // @Failure 500 {object} models.Message "Internal error"
 // @Router /tasks/{taskID}/relations/{relationKind}/{otherTaskID} [delete]
 func (rel *TaskRelation) Delete(s *xorm.Session, a web.Auth) error {
+	// Load the full relation first (populates CreatedBy)
+	err := rel.ReadOne(s, a)
+	if err != nil {
+		return err
+	}
 
+	// Build condition for deleting both the forward and inverse relations
 	cond := builder.Or(
 		builder.And(
 			builder.Eq{"task_id": rel.TaskID},
@@ -299,21 +329,6 @@ func (rel *TaskRelation) Delete(s *xorm.Session, a web.Auth) error {
 			builder.Eq{"relation_kind": getInverseRelation(rel.RelationKind)},
 		),
 	)
-
-	// Check if the relation exists
-	exists, err := s.
-		Where(cond).
-		Exist(&TaskRelation{})
-	if err != nil {
-		return err
-	}
-	if !exists {
-		return ErrRelationDoesNotExist{
-			TaskID:      rel.TaskID,
-			OtherTaskID: rel.OtherTaskID,
-			Kind:        rel.RelationKind,
-		}
-	}
 
 	_, err = s.
 		Where(cond).

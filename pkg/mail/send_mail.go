@@ -40,12 +40,13 @@ type Opts struct {
 	Headers     []*header
 	Embeds      map[string]io.Reader
 	EmbedFS     map[string]*embed.FS
+	ThreadID    string
 }
 
 // ContentType represents mail content types
 type ContentType int
 
-// Enumerate all the team rights
+// Enumerate all the team permissions
 const (
 	ContentTypePlain ContentType = iota
 	ContentTypeHTML
@@ -88,6 +89,11 @@ func getMessage(opts *Opts) *mail.Msg {
 		m.SetGenHeader(h.Field, h.Content)
 	}
 
+	if opts.ThreadID != "" {
+		m.SetGenHeader(mail.HeaderInReplyTo, opts.ThreadID)
+		m.SetGenHeader(mail.HeaderReferences, opts.ThreadID)
+	}
+
 	for name, content := range opts.Embeds {
 		err := m.EmbedReader(name, content)
 		if err != nil {
@@ -98,7 +104,7 @@ func getMessage(opts *Opts) *mail.Msg {
 	for name, fs := range opts.EmbedFS {
 		err := m.EmbedFromEmbedFS(name, fs)
 		if err != nil {
-			log.Errorf("Error embedding %s via embed.FS into mail: %v", err)
+			log.Errorf("Error embedding %s via embed.FS into mail: %v", name, err)
 		}
 	}
 
@@ -119,6 +125,10 @@ func getMessage(opts *Opts) *mail.Msg {
 func SendMail(opts *Opts) {
 	if isUnderTest {
 		sentMails = append(sentMails, opts)
+		return
+	}
+
+	if !config.MailerEnabled.GetBool() || Queue == nil {
 		return
 	}
 

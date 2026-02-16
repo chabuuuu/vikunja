@@ -17,12 +17,7 @@
 package handler
 
 import (
-	"net/http"
-
-	"code.vikunja.io/api/pkg/log"
 	"code.vikunja.io/api/pkg/web"
-
-	"github.com/labstack/echo/v4"
 )
 
 // WebHandler defines the webhandler object
@@ -34,15 +29,5 @@ type WebHandler struct {
 // CObject is the definition of our object, holds the structs
 type CObject interface {
 	web.CRUDable
-	web.Rights
-}
-
-// HandleHTTPError does what it says
-func HandleHTTPError(err error) *echo.HTTPError {
-	log.Error(err.Error())
-	if a, has := err.(web.HTTPErrorProcessor); has {
-		errDetails := a.HTTPError()
-		return echo.NewHTTPError(errDetails.HTTPCode, errDetails).SetInternal(err)
-	}
-	return echo.NewHTTPError(http.StatusInternalServerError).SetInternal(err)
+	web.Permissions
 }

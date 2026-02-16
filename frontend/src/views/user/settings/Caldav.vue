@@ -6,26 +6,22 @@
 		<p>
 			{{ $t('user.settings.caldav.howTo') }}
 		</p>
-		<div class="field has-addons no-input-mobile">
-			<div class="control is-expanded">
-				<input
-					v-model="caldavUrl"
-					type="text"
-					class="input"
-					readonly
-				>
-			</div>
-			<div class="control">
+		<FormField
+			v-model="caldavUrl"
+			type="text"
+			readonly
+		>
+			<template #addon>
 				<XButton
 					v-tooltip="$t('misc.copy')"
 					:shadow="false"
 					icon="paste"
 					@click="copy(caldavUrl)"
 				/>
-			</div>
-		</div>
+			</template>
+		</FormField>
 
-		<h5 class="mt-5 mb-4 has-text-weight-bold">
+		<h5 class="mbs-5 mbe-4 has-text-weight-bold">
 			{{ $t('user.settings.caldav.tokens') }}
 		</h5>
 
@@ -49,7 +45,7 @@
 			<tr>
 				<th>{{ $t('misc.id') }}</th>
 				<th>{{ $t('misc.created') }}</th>
-				<th class="has-text-right">
+				<th class="has-text-end">
 					{{ $t('misc.actions') }}
 				</th>
 			</tr>
@@ -59,7 +55,7 @@
 			>
 				<td>{{ tk.id }}</td>
 				<td>{{ formatDateShort(tk.created) }}</td>
-				<td class="has-text-right">
+				<td class="has-text-end">
 					<XButton
 						variant="secondary"
 						@click="deleteToken(tk)"
@@ -72,7 +68,7 @@
 
 		<Message
 			v-if="newToken"
-			class="mb-4"
+			class="mbe-4"
 		>
 			{{ $t('user.settings.caldav.tokenCreated', {token: newToken.token}) }}<br>
 			{{ $t('user.settings.caldav.wontSeeItAgain') }}
@@ -80,7 +76,7 @@
 
 		<XButton
 			icon="plus"
-			class="mb-4"
+			class="mbe-4"
 			:loading="service.loading"
 			@click="createToken"
 		>
@@ -108,6 +104,7 @@ import {useCopyToClipboard} from '@/composables/useCopyToClipboard'
 import {success} from '@/message'
 import BaseButton from '@/components/base/BaseButton.vue'
 import Message from '@/components/misc/Message.vue'
+import FormField from '@/components/input/FormField.vue'
 import CaldavTokenService from '@/services/caldavToken'
 import { formatDateShort } from '@/helpers/time/formatDate'
 import type {ICaldavToken} from '@/modelTypes/ICaldavToken'

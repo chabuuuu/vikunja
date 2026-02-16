@@ -28,7 +28,7 @@
 						>
 							<span
 								:key="`item${key}`"
-								class="tag ml-2 mt-2"
+								class="tag mis-2 mbs-2"
 							>
 								{{ label !== '' ? item[label] : item }}
 								<BaseButton
@@ -90,7 +90,10 @@
 							<span class="search-result">{{ label !== '' ? data[label] : data }}</span>
 						</slot>
 					</span>
-					<span class="hint-text">
+					<span
+						v-if="selectPlaceholder.trim()"
+						class="hint-text"
+					>
 						{{ selectPlaceholder }}
 					</span>
 				</BaseButton>
@@ -170,7 +173,7 @@ const props = withDefaults(defineProps<{
 }>(), {
 	loading: false,
 	placeholder: '',
-	searchResults: () => [],
+	searchResults: () => [] as T[],
 	label: '',
 	creatable: false,
 	createPlaceholder: () => useI18n().t('input.multiselect.createPlaceholder'),
@@ -248,8 +251,8 @@ const searchResultsVisible = computed(() => {
 })
 
 const creatableAvailable = computed(() => {
-	const hasResult = filteredSearchResults.value.some((elem) => elementInResults(elem, props.label, query.value as string))
-	const hasQueryAlreadyAdded = Array.isArray(internalValue.value) && internalValue.value.some(elem => elementInResults(elem, props.label, query.value))
+	const hasResult = filteredSearchResults.value.some((elem: T) => elementInResults(elem, props.label, query.value as string))
+	const hasQueryAlreadyAdded = Array.isArray(internalValue.value) && internalValue.value.some((elem: T) => elementInResults(elem, props.label, query.value))
 
 	return props.creatable
 		&& query.value !== ''
@@ -259,7 +262,7 @@ const creatableAvailable = computed(() => {
 const filteredSearchResults = computed(() => {
 	const currentInternal = internalValue.value
 	if (props.multiple && currentInternal !== null && Array.isArray(currentInternal)) {
-		return searchResults.value.filter((item) => !currentInternal.some(e => e === item))
+		return searchResults.value.filter((item: T) => !currentInternal.some((e: T) => e === item))
 	}
 
 	return searchResults.value
@@ -302,7 +305,9 @@ function search() {
 const multiselectRoot = ref<HTMLElement | null>(null)
 
 function hideSearchResultsHandler(e: MouseEvent) {
-	closeWhenClickedOutside(e, multiselectRoot.value, closeSearchResults)
+	if (multiselectRoot.value) {
+		closeWhenClickedOutside(e, multiselectRoot.value, closeSearchResults)
+	}
 }
 
 function closeSearchResults() {
@@ -318,6 +323,17 @@ function handleFocus() {
 }
 
 function select(object: T | null) {
+	if (object === null) {
+		// Handle clearing the value
+		if (!props.multiple) {
+			internalValue.value = null
+			query.value = ''
+			emit('update:modelValue', null)
+			closeSearchResults()
+		}
+		return
+	}
+
 	if (props.multiple) {
 		if (internalValue.value === null) {
 			internalValue.value = []
@@ -336,7 +352,7 @@ function select(object: T | null) {
 	}
 }
 
-function setSelectedObject(object: string | T | null, resetOnly = false) {
+function setSelectedObject(object: string | T | null | undefined, resetOnly = false) {
 	internalValue.value = object
 
 	// We assume we're getting an array when multiple is enabled and can therefore leave the query
@@ -346,7 +362,7 @@ function setSelectedObject(object: string | T | null, resetOnly = false) {
 		return
 	}
 
-	if (object === null) {
+	if (object === null || typeof object === 'undefined') {
 		query.value = ''
 		return
 	}
@@ -355,7 +371,13 @@ function setSelectedObject(object: string | T | null, resetOnly = false) {
 		return
 	}
 
-	query.value = props.label !== '' ? object[props.label] : object
+	if (typeof object === 'string') {
+		query.value = object
+	} else if (props.label !== '') {
+		query.value = object[props.label] as string
+	} else {
+		query.value = String(object)
+	}
 }
 
 const results = ref<(Element | ComponentPublicInstance)[]>([])
@@ -375,16 +397,20 @@ function preSelect(index: number) {
 	}
 
 	const elems = results.value[index]
-	if (typeof elems === 'undefined' || elems.length === 0) {
+	if (typeof elems === 'undefined') {
 		return
 	}
 
 	if (Array.isArray(elems)) {
-		elems[0].focus()
+		if (elems.length > 0 && 'focus' in elems[0]) {
+			(elems[0] as HTMLElement).focus()
+		}
 		return
 	}
 
-	elems.focus()
+	if ('focus' in elems) {
+		(elems as HTMLElement).focus()
+	}
 }
 
 function create() {
@@ -405,7 +431,7 @@ function createOrSelectOnEnter() {
 
 	if (!creatableAvailable.value) {
 		// Check if there's an exact match for our search term
-		const exactMatch = filteredSearchResults.value.find((elem) => elementInResults(elem, props.label, query.value as string))
+		const exactMatch = filteredSearchResults.value.find((elem: T) => elementInResults(elem, props.label, query.value as string))
 		if (exactMatch) {
 			select(exactMatch)
 		}
@@ -435,11 +461,12 @@ function focus() {
 
 <style lang="scss" scoped>
 .multiselect {
-	width: 100%;
+	inline-size: 100%;
 	position: relative;
+	container-type: inline-size;
 
 	.control.is-loading::after {
-		top: .75rem;
+		inset-block-start: .75rem;
 	}
 
 	&.is-disabled {
@@ -460,7 +487,7 @@ function focus() {
 	background: var(--white);
 	border-color: var(--grey-200);
 	flex-wrap: wrap;
-	height: auto;
+	block-size: auto;
 
 	&:hover {
 		border-color: var(--grey-300) !important;
@@ -468,12 +495,12 @@ function focus() {
 
 	.input {
 		display: flex;
-		max-width: 100%;
-		width: 100%;
+		max-inline-size: 100%;
+		inline-size: 100%;
 		align-items: center;
 		border: none !important;
 		background: transparent;
-		height: auto;
+		block-size: auto;
 
 		&::placeholder {
 			font-style: normal !important;
@@ -481,10 +508,10 @@ function focus() {
 	}
 
 	&.has-multiple .input {
-		max-width: 250px;
+		max-inline-size: 250px;
 
 		input {
-			padding-left: 0;
+			padding-inline-start: 0;
 		}
 	}
 
@@ -505,7 +532,7 @@ function focus() {
 	background: var(--white) !important;
 
 	&, &:focus-within {
-		border-bottom-color: var(--grey-200) !important;
+		border-block-end-color: var(--grey-200) !important;
 	}
 }
 
@@ -513,14 +540,16 @@ function focus() {
 	background: var(--white);
 	border-radius: 0 0 $radius $radius;
 	border: 1px solid var(--primary);
-	border-top: none;
+	border-block-start: none;
 
-	max-height: 50vh;
-	overflow-x: auto;
+	max-block-size: 50vh;
+	overflow: hidden auto;
 	position: absolute;
 	z-index: 100;
-	max-width: 100%;
-	min-width: 100%;
+	inset-inline: 0;
+	inline-size: 100%;
+	box-sizing: border-box;
+	clip-path: inset(0);
 }
 
 .search-results-inline {
@@ -529,7 +558,7 @@ function focus() {
 
 .search-result-button {
 	background: transparent;
-	text-align: left;
+	text-align: start;
 	box-shadow: none;
 	border-radius: 0;
 	text-transform: none;
@@ -541,9 +570,17 @@ function focus() {
 	color: var(--grey-800);
 
 	display: flex;
-	justify-content: space-between;
 	align-items: center;
 	overflow: hidden;
+	max-inline-size: 100%;
+	box-sizing: border-box;
+	position: relative;
+
+	> span:first-child {
+		overflow: hidden;
+		min-inline-size: 0;
+		flex: 1;
+	}
 
 	&:focus,
 	&:hover {
@@ -572,7 +609,7 @@ function focus() {
 	font-size: .75rem;
 	color: transparent;
 	transition: color $transition;
-	padding-left: .5rem;
+	padding-inline-start: .5rem;
 }
 
 .has-removal-button {
@@ -581,7 +618,7 @@ function focus() {
 
 .removal-button {
 	position: absolute;
-	right: .5rem;
+	inset-inline-end: .5rem;
 	color: var(--danger);
 }
 </style>

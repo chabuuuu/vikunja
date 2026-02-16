@@ -1,5 +1,8 @@
 <template>
-	<div>
+	<div
+		:data-task-id="task.id"
+		:data-project-id="task.projectId"
+	>
 		<div
 			ref="taskRoot"
 			:class="{'is-loading': taskService.loading}"
@@ -18,20 +21,20 @@
 			<ColorBubble
 				v-if="!showProjectSeparately && projectColor !== '' && currentProject?.id !== task.projectId"
 				:color="projectColor"
-				class="mr-1"
+				class="mie-1"
 			/>
 
 			<div
 				:class="{ 'done': task.done, 'show-project': showProject && project}"
 				class="tasktext"
 			>
-				<span>
+				<span class="is-inline-flex is-align-items-center">
 					<RouterLink
 						v-if="showProject && typeof project !== 'undefined'"
 						v-tooltip="$t('task.detail.belongsToProject', {project: project.title})"
 						:to="{ name: 'project.index', params: { projectId: task.projectId } }"
-						class="task-project mr-1"
-						:class="{'mr-2': task.hexColor !== ''}"
+						class="task-project mie-1"
+						:class="{'mie-2': task.hexColor !== ''}"
 						@click.stop
 					>
 						{{ project.title }}
@@ -40,28 +43,30 @@
 					<ColorBubble
 						v-if="task.hexColor !== ''"
 						:color="getHexColor(task.hexColor)"
-						class="mr-1"
+						class="mie-1"
 					/>
 	
 					<PriorityLabel
 						:priority="task.priority"
 						:done="task.done"
-						class="pr-2"
+						class="pis-2 mie-1"
 					/>
 
-					<RouterLink
-						ref="taskLinkRef"
-						:to="taskDetailRoute"
-						class="task-link"
-						tabindex="-1"
-					>
-						{{ task.title }}
-					</RouterLink>
+					<TaskGlanceTooltip :task="task">
+						<RouterLink
+							ref="taskLinkRef"
+							:to="taskDetailRoute"
+							class="task-link"
+							tabindex="-1"
+						>
+							{{ task.title }}
+						</RouterLink>
+					</TaskGlanceTooltip>
 				</span>
 
 				<Labels
 					v-if="task.labels.length > 0"
-					class="labels ml-2 mr-1"
+					class="labels mis-2 mie-1"
 					:labels="task.labels"
 				/>
 
@@ -69,7 +74,7 @@
 					v-if="task.assignees.length > 0"
 					:assignees="task.assignees"
 					:avatar-size="25"
-					class="ml-1"
+					class="mis-1"
 					:inline="true"
 				/>
 
@@ -110,7 +115,7 @@
 					</span>
 					<span
 						v-if="!isEditorContentEmpty(task.description)"
-						class="project-task-icon"
+						class="project-task-icon is-mirrored-rtl"
 					>
 						<Icon icon="align-left" />
 					</span>
@@ -120,6 +125,10 @@
 					>
 						<Icon icon="history" />
 					</span>
+					<CommentCount
+						:task="task"
+						class="project-task-icon"
+					/>
 				</span>
 
 				<ChecklistSummary :task="task" />
@@ -134,7 +143,7 @@
 			<ColorBubble
 				v-if="showProjectSeparately && projectColor !== '' && currentProject?.id !== task.projectId"
 				:color="projectColor"
-				class="mr-1"
+				class="mie-1"
 			/>
 
 			<RouterLink
@@ -152,7 +161,7 @@
 				class="favorite"
 				@click.stop="toggleFavorite"
 			>
-				<span class="tw-sr-only">{{ task.isFavorite ? $t('task.detail.actions.unfavorite') : $t('task.detail.actions.favorite') }}</span>
+				<span class="is-sr-only">{{ task.isFavorite ? $t('task.detail.actions.unfavorite') : $t('task.detail.actions.favorite') }}</span>
 				<Icon
 					v-if="task.isFavorite"
 					icon="star"
@@ -190,8 +199,10 @@ import type {ITask} from '@/modelTypes/ITask'
 
 import PriorityLabel from '@/components/tasks/partials/PriorityLabel.vue'
 import Labels from '@/components/tasks/partials/Labels.vue'
+import TaskGlanceTooltip from '@/components/tasks/partials/TaskGlanceTooltip.vue'
 import DeferTask from '@/components/tasks/partials/DeferTask.vue'
 import ChecklistSummary from '@/components/tasks/partials/ChecklistSummary.vue'
+import CommentCount from '@/components/tasks/partials/CommentCount.vue'
 
 import ProgressBar from '@/components/misc/ProgressBar.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -201,7 +212,7 @@ import Popup from '@/components/misc/Popup.vue'
 
 import TaskService from '@/services/task'
 
-import {formatDateSince, formatISO, formatDateLong} from '@/helpers/time/formatDate'
+import {formatDisplayDate, formatISO, formatDateLong} from '@/helpers/time/formatDate'
 import {success} from '@/message'
 
 import {useProjectStore} from '@/stores/projects'
@@ -286,7 +297,7 @@ function updateDueDate() {
 		return
 	}
 
-	dueDateFormatted.value = formatDateSince(task.value.dueDate)
+	dueDateFormatted.value = formatDisplayDate(task.value.dueDate)
 }
 
 const dueDateFormatted = ref('')
@@ -420,7 +431,7 @@ defineExpose({
 
 		.dueDate {
 			display: inline-block;
-			margin-left: 5px;
+			margin-inline-start: 5px;
 
 			&:focus-visible {
 				box-shadow: none;
@@ -438,7 +449,7 @@ defineExpose({
 	}
 
 	.task-project {
-		width: auto;
+		inline-size: auto;
 		color: var(--grey-400);
 		font-size: .9rem;
 		white-space: nowrap;
@@ -447,16 +458,16 @@ defineExpose({
 	.avatar {
 		border-radius: 50%;
 		vertical-align: bottom;
-		margin-left: 5px;
-		height: 27px;
-		width: 27px;
+		margin-inline-start: 5px;
+		block-size: 27px;
+		inline-size: 27px;
 	}
 
 	.project-task-icon {
-		margin-left: 6px;
+		margin-inline-start: 6px;
 
 		&:not(:first-of-type) {
-			margin-left: 8px;
+			margin-inline-start: 8px;
 		}
 
 	}
@@ -473,7 +484,7 @@ defineExpose({
 	.favorite {
 		opacity: 1;
 		text-align: center;
-		width: 27px;
+		inline-size: 27px;
 		transition: opacity $transition, color $transition;
 		border-radius: $radius;
 
@@ -502,9 +513,9 @@ defineExpose({
 	}
 
 	:deep(.fancy-checkbox) {
-		height: 18px;
-		padding-top: 0;
-		padding-right: .5rem;
+		block-size: 18px;
+		padding-block-start: 0;
+		padding-inline-end: .5rem;
 
 		span {
 			display: none;
@@ -518,11 +529,11 @@ defineExpose({
 
 	span.parent-tasks {
 		color: var(--grey-500);
-		width: auto;
+		inline-size: auto;
 	}
 
 	.show-project .parent-tasks {
-		padding-left: .25rem;
+		padding-inline-start: .25rem;
 	}
 
 	.remove {
@@ -534,23 +545,23 @@ defineExpose({
 	}
 
 	.settings {
-		float: right;
-		width: 24px;
+		float: inline-end;
+		inline-size: 24px;
 		cursor: pointer;
 	}
 
 	&.loader-container.is-loading:after {
-		top: calc(50% - 1rem);
-		left: calc(50% - 1rem);
-		width: 2rem;
-		height: 2rem;
-		border-left-color: var(--grey-300);
-		border-bottom-color: var(--grey-300);
+		inset-block-start: calc(50% - 1rem);
+		inset-inline-start: calc(50% - 1rem);
+		inline-size: 2rem;
+		block-size: 2rem;
+		border-inline-start-color: var(--grey-300);
+		border-block-end-color: var(--grey-300);
 	}
 }
 
 .subtask-nested {
-	margin-left: 1.75rem;
+	margin-inline-start: 1.75rem;
 }
 
 :deep(.popup) {
@@ -558,7 +569,7 @@ defineExpose({
 	background-color: var(--white);
 	box-shadow: var(--shadow-lg);
 	color: var(--text);
-	top: unset;
+	inset-block-start: unset;
 	
 	&.is-open {
 		padding: 1rem;

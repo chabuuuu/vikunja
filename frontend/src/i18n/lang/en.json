@@ -93,6 +93,8 @@
         "discoverableByEmail": "Allow other users to add me as a member to teams or projects when they search for my full email",
         "playSoundWhenDone": "Play a sound when marking tasks as done",
         "allowIconChanges": "Show special logos during certain times",
+        "alwaysShowBucketTaskCount": "Always show task count on Kanban buckets",
+        "defaultTaskRelationType": "Default task relation type",
         "weekStart": "Week starts on",
         "weekStartSunday": "Sunday",
         "weekStartMonday": "Monday",
@@ -103,7 +105,29 @@
         "overdueTasksRemindersTime": "Overdue tasks reminder email time",
         "filterUsedOnOverview": "Saved filter used on the overview page",
         "minimumPriority": "Minimum visible task priority",
+        "dateDisplay": "Date display format",
+        "dateDisplayOptions": {
+          "relative": "Relative (e.g. 3 days ago)",
+          "mm-dd-yyyy": "MM-DD-YYYY",
+          "dd-mm-yyyy": "DD-MM-YYYY",
+          "yyyy-mm-dd": "YYYY-MM-DD",
+          "mm\/dd\/yyyy": "MM\/DD\/YYYY",
+          "dd\/mm\/yyyy": "DD\/MM\/YYYY",
+          "yyyy\/mm\/dd": "YYYY\/MM\/DD"
+        },
+        "timeFormat": "Time format",
+        "timeFormatOptions": {
+          "12h": "12-hour (AM/PM)",
+          "24h": "24-hour (HH:mm)"
+        },
         "externalUserNameChange": "Your name is managed by your login provider ({provider}). To change it, please update it there instead."
+      },
+      "sections": {
+        "personalInformation": "Personal Information",
+        "taskAndNotifications": "Projects & Tasks",
+        "privacy": "Privacy",
+        "localization": "Localization",
+        "appearance": "Appearance & Behavior"
       },
       "totp": {
         "title": "Two Factor Authentication",
@@ -158,6 +182,9 @@
           "dark": "Dark"
         }
       },
+      "backgroundBrightness": {
+        "title": "Background brightness"
+      },
       "apiTokens": {
         "title": "API Tokens",
         "general": "API tokens allow you to use Vikunja's API without user credentials.",
@@ -209,7 +236,9 @@
       "descriptionPasswordRequired": "Please enter your password to proceed:",
       "request": "Request a copy of my Vikunja Data",
       "success": "You've successfully requested your Vikunja Data! We will send you an email once it's ready to download.",
-      "downloadTitle": "Download your exported Vikunja data"
+      "downloadTitle": "Download your exported Vikunja data",
+      "ready": "Your export is ready to download. You can download it until {0}.",
+      "requestNew": "Request another export"
     }
   },
   "project": {
@@ -317,7 +346,7 @@
         "addedSuccess": "The {type} was successfully added.",
         "updatedSuccess": "The {type} was successfully added."
       },
-      "right": {
+      "permission": {
         "title": "Permission",
         "read": "Read only",
         "readWrite": "Read & write",
@@ -347,7 +376,21 @@
       "day": "Day",
       "hour": "Hour",
       "range": "Date Range",
-      "noDates": "This task has no dates set."
+      "chartLabel": "Project Gantt Chart",
+      "taskBarsForRow": "Task bars for row {rowId}",
+      "taskBarLabel": "Task: {task}. From {startDate} to {endDate}. {dateType}. Click to edit, drag to move.",
+      "scheduledDates": "Scheduled dates",
+      "estimatedDates": "Estimated dates",
+      "resizeStartDate": "Resize start date for task {task}",
+      "resizeEndDate": "Resize end date for task {task}",
+      "timelineHeader": "Timeline header with months and days",
+      "monthsRow": "Months row",
+      "daysRow": "Days row",
+      "monthLabel": "Month: {month}",
+      "dayLabel": "Day: {date}, {weekday}",
+      "dayLabelToday": "Today: {date}, {weekday}",
+      "taskAriaLabel": "Task: {task}",
+      "taskAriaLabelById": "Task {id}"
     },
     "table": {
       "title": "Table",
@@ -396,6 +439,9 @@
       "deleteSuccess": "The webhook was successfully deleted.",
       "create": "Create webhook",
       "secret": "Secret",
+      "basicauthuser": "Basic Auth User",
+      "basicauthpassword": "Basic Auth Password",
+      "basicauthlink": "Use Basic Auth?",
       "secretHint": "If provided, all requests to the webhook target URL will be signed using HMAC.",
       "secretDocs": "Check out the docs for more details about how to use secrets."
     },
@@ -422,6 +468,7 @@
     "title": "Filters",
     "clear": "Clear Filters",
     "showResults": "Show results",
+    "noResults": "No results",
     "fromView": "The current view has a filter set as well:",
     "fromViewBoth": "It will be used in combination with what you enter here.",
     "attributes": {
@@ -553,7 +600,11 @@
     "authenticating": "Authenticating…",
     "passwordRequired": "This shared project requires a password. Please enter it below:",
     "error": "An error occurred.",
-    "invalidPassword": "The password is invalid."
+    "invalidPassword": "The password is invalid.",
+    "accessDenied": "Access denied. Please check your permissions and try again.",
+    "serverError": "Server error occurred. Please try again later.",
+    "projectLoadError": "Failed to load project information.",
+    "retry": "Retry"
   },
   "navigation": {
     "overview": "Overview",
@@ -752,6 +803,7 @@
     "addReminder": "Add a reminder…",
     "doneSuccess": "The task was successfully marked as done.",
     "undoneSuccess": "The task was successfully un-marked as done.",
+    "movedToProject": "The task was moved to {project}.",
     "undo": "Undo",
     "openDetail": "Open task detail view",
     "checklistTotal": "{checked} of {total} tasks",
@@ -759,11 +811,13 @@
     "show": {
       "titleCurrent": "Current Tasks",
       "titleDates": "Tasks from {from} until {to}",
-      "noDates": "Show tasks without dates",
+      "noDates": "Show tasks without date",
       "overdue": "Show overdue tasks",
       "fromuntil": "Tasks from {from} until {until}",
       "select": "Select a date range",
-      "noTasks": "Nothing to do — Have a nice day!"
+      "noTasks": "Nothing to do — Have a nice day!",
+      "filterByLabel": "Filtering by label {label}",
+      "clearLabelFilter": "Clear label filter"
     },
     "detail": {
       "chooseDueDate": "Click here to set a due date",
@@ -778,8 +832,10 @@
       "updateSuccess": "The task was saved successfully.",
       "deleteSuccess": "The task has been deleted successfully.",
       "belongsToProject": "This task belongs to project '{project}'",
+      "back": "Back to project",
       "due": "Due {at}",
       "closePopup": "Close popup",
+      "scrollToBottom": "Scroll to bottom",
       "organization": "Organization",
       "management": "Management",
       "dateAndTime": "Date and time",
@@ -822,6 +878,8 @@
       "relatedTasks": "Related Tasks",
       "reminders": "Reminders",
       "repeat": "Repeat",
+      "comment": "{count} comment | {count} comments",
+      "commentCount": "Number of comments",
       "startDate": "Start Date",
       "title": "Title",
       "updated": "Updated",
@@ -868,6 +926,9 @@
       "deleteSuccess": "The comment was deleted successfully.",
       "addedSuccess": "The comment was added successfully.",
       "permalink": "Copy permalink to this comment"
+    },
+    "mention": {
+      "noUsersFound": "No users found"
     },
     "deferDueDate": {
       "title": "Defer due date",
@@ -976,7 +1037,7 @@
       "project4": "For example: {prefix}\"Project with spaces\".",
       "dateAndTime": "Date and time",
       "date": "Any date will be used as the due date of the new task. You can use dates in any of these formats:",
-      "dateWeekday": "any weekday, will use the next date with that date",
+      "dateWeekday": "any weekday, will use the next date with that day",
       "dateCurrentYear": "will use the current year",
       "dateNth": "will use the {day}th of the current month",
       "dateTime": "Combine any of the date formats with \"{time}\" (or {timePM}) to set a time.",
@@ -1059,7 +1120,11 @@
       "priority": "Change the priority of this task",
       "favorite": "Mark this task as favorite / unfavorite",
       "openProject": "Open the project of this task",
-      "save": "Save the current task"
+      "save": "Save the current task",
+      "copyIdentifier": "Copy task identifier to clipboard",
+      "copyIdentifierAndTitle": "Copy task identifier and title to clipboard",
+      "copyIdentifierTitleAndUrl": "Copy task identifier, title and URL to clipboard",
+      "copyUrl": "Copy task URL to clipboard"
     },
     "project": {
       "title": "Project Views",
@@ -1081,6 +1146,15 @@
       "navigateDown": "Highlight next task",
       "navigateUp": "Highlight previous task",
       "open": "Open highlighted task"
+    },
+    "gantt": {
+      "title": "Gantt Chart",
+      "moveTaskLeft": "Move task to earlier date",
+      "moveTaskRight": "Move task to later date",
+      "expandTaskLeft": "Expand task start date earlier",
+      "expandTaskRight": "Expand task end date later",
+      "shrinkTaskLeft": "Shrink task from start date",
+      "shrinkTaskRight": "Shrink task from end date"
     }
   },
   "update": {
@@ -1118,7 +1192,7 @@
   "notification": {
     "title": "Notifications",
     "none": "You don't have any notifications. Have a nice day!",
-    "explainer": "Notifications will appear here when actions projects or tasks you subscribed to happen.",
+    "explainer": "Notifications will appear here when actions, projects or tasks you subscribed to happen.",
     "markAllRead": "Mark all notifications as read",
     "markAllReadSuccess": "Successfully marked all notifications as read."
   },

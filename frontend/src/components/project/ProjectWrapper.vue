@@ -23,7 +23,7 @@
 					:key="view.id"
 					class="switch-view-button"
 					:class="{'is-active': view.id === viewId}"
-					:to="{ name: 'project.view', params: { projectId, viewId: view.id } }"
+					:to="getViewRoute(view)"
 				>
 					{{ getViewTitle(view) }}
 				</BaseButton>
@@ -34,7 +34,7 @@
 			<Message
 				v-if="currentProject?.isArchived"
 				variant="warning"
-				class="mb-4"
+				class="mbe-4"
 			>
 				{{ $t('project.archivedMessage') }}
 			</Message>
@@ -57,6 +57,7 @@ import {useTitle} from '@/composables/useTitle'
 
 import {useBaseStore} from '@/stores/base'
 import {useProjectStore} from '@/stores/projects'
+import {useViewFiltersStore} from '@/stores/viewFilters'
 
 import type {IProject} from '@/modelTypes/IProject'
 import type {IProjectView} from '@/modelTypes/IProjectView'
@@ -71,14 +72,15 @@ const {t} = useI18n()
 
 const baseStore = useBaseStore()
 const projectStore = useProjectStore()
+const viewFiltersStore = useViewFiltersStore()
 
 const currentProject = computed<IProject>(() => {
-	return typeof baseStore.currentProject === 'undefined' ? {
+	return baseStore.currentProject || {
 		id: 0,
 		title: '',
 		isArchived: false,
-		maxRight: null,
-	} : baseStore.currentProject
+		maxPermission: null,
+	}
 })
 useTitle(() => currentProject.value?.id ? getProjectTitle(currentProject.value) : '')
 
@@ -95,15 +97,24 @@ function getViewTitle(view: IProjectView) {
 		case 'Kanban':
 			return t('project.kanban.title')
 	}
-	
+
 	return view.title
+}
+
+function getViewRoute(view: IProjectView) {
+	const storedQuery = viewFiltersStore.getViewQuery(view.id)
+	return {
+		name: 'project.view',
+		params: {projectId: props.projectId, viewId: view.id},
+		query: storedQuery,
+	}
 }
 </script>
 
 <style lang="scss" scoped>
 .switch-view-container {
-	min-height: $switch-view-height;
-	margin-bottom: 1rem;
+	min-block-size: $switch-view-height;
+	margin-block-end: 1rem;
 	
 	display: flex;
 	justify-content: space-between;
@@ -132,7 +143,7 @@ function getViewTitle(view: IProjectView) {
 	transition: all 100ms;
 
 	&:not(:last-child) {
-		margin-right: .5rem;
+		margin-inline-end: .5rem;
 	}
 
 	&:hover {
@@ -150,14 +161,14 @@ function getViewTitle(view: IProjectView) {
 
 // FIXME: this should be in notification and set via a prop
 .is-archived .notification.is-warning {
-	margin-bottom: 1rem;
+	margin-block-end: 1rem;
 }
 
 .project-title-print {
 	display: none;
 	font-size: 1.75rem;
 	text-align: center;
-	margin-bottom: .5rem;
+	margin-block-end: .5rem;
 
 	@media print {
 		display: block;

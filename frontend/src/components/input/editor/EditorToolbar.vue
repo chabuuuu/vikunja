@@ -8,13 +8,13 @@
 				@click="editor.chain().focus().toggleHeading({ level: 1 }).run()"
 			>
 				<span class="icon">
-					<Icon :icon="['fa', 'fa-header']" />
+					<Icon :icon="['fas', 'header']" />
 					<span
 						class="icon__lower-text"
 						aria-hidden="true"
 					>1</span>
 				</span>
-				<span class="tw-sr-only">{{ $t('input.editor.heading1') }}</span>
+				<span class="is-sr-only">{{ $t('input.editor.heading1') }}</span>
 			</BaseButton>
 			<BaseButton
 				v-tooltip="$t('input.editor.heading2')"
@@ -23,13 +23,13 @@
 				@click="editor.chain().focus().toggleHeading({ level: 2 }).run()"
 			>
 				<span class="icon">
-					<Icon :icon="['fa', 'fa-header']" />
+					<Icon :icon="['fas', 'header']" />
 					<span
 						class="icon__lower-text"
 						aria-hidden="true"
 					>2</span>
 				</span>
-				<span class="tw-sr-only">{{ $t('input.editor.heading2') }}</span>
+				<span class="is-sr-only">{{ $t('input.editor.heading2') }}</span>
 			</BaseButton>
 			<BaseButton
 				v-tooltip="$t('input.editor.heading3')"
@@ -38,13 +38,13 @@
 				@click="editor.chain().focus().toggleHeading({ level: 3 }).run()"
 			>
 				<span class="icon">
-					<Icon :icon="['fa', 'fa-header']" />
+					<Icon :icon="['fas', 'header']" />
 					<span
 						class="icon__lower-text"
 						aria-hidden="true"
 					>3</span>
 				</span>
-				<span class="tw-sr-only">{{ $t('input.editor.heading3') }}</span>
+				<span class="is-sr-only">{{ $t('input.editor.heading3') }}</span>
 			</BaseButton>
 		</div>
 
@@ -56,9 +56,9 @@
 				@click="editor.chain().focus().toggleBold().run()"
 			>
 				<span class="icon">
-					<Icon :icon="['fa', 'fa-bold']" />
+					<Icon :icon="['fas', 'bold']" />
 				</span>
-				<span class="tw-sr-only">{{ $t('input.editor.bold') }}</span>
+				<span class="is-sr-only">{{ $t('input.editor.bold') }}</span>
 			</BaseButton>
 			<BaseButton
 				v-tooltip="$t('input.editor.italic')"
@@ -67,9 +67,9 @@
 				@click="editor.chain().focus().toggleItalic().run()"
 			>
 				<span class="icon">
-					<Icon :icon="['fa', 'fa-italic']" />
+					<Icon :icon="['fas', 'italic']" />
 				</span>
-				<span class="tw-sr-only">{{ $t('input.editor.italic') }}</span>
+				<span class="is-sr-only">{{ $t('input.editor.italic') }}</span>
 			</BaseButton>
 			<BaseButton
 				v-tooltip="$t('input.editor.underline')"
@@ -78,9 +78,9 @@
 				@click="editor.chain().focus().toggleUnderline().run()"
 			>
 				<span class="icon">
-					<Icon :icon="['fa', 'fa-underline']" />
+					<Icon :icon="['fas', 'underline']" />
 				</span>
-				<span class="tw-sr-only">{{ $t('input.editor.underline') }}</span>
+				<span class="is-sr-only">{{ $t('input.editor.underline') }}</span>
 			</BaseButton>
 			<BaseButton
 				v-tooltip="$t('input.editor.strikethrough')"
@@ -89,9 +89,9 @@
 				@click="editor.chain().focus().toggleStrike().run()"
 			>
 				<span class="icon">
-					<Icon :icon="['fa', 'fa-strikethrough']" />
+					<Icon :icon="['fas', 'strikethrough']" />
 				</span>
-				<span class="tw-sr-only">{{ $t('input.editor.strikethrough') }}</span>
+				<span class="is-sr-only">{{ $t('input.editor.strikethrough') }}</span>
 			</BaseButton>
 		</div>
 
@@ -103,9 +103,9 @@
 				@click="editor.chain().focus().toggleCodeBlock().run()"
 			>
 				<span class="icon">
-					<Icon :icon="['fa', 'fa-code']" />
+					<Icon :icon="['fas', 'code']" />
 				</span>
-				<span class="tw-sr-only">{{ $t('input.editor.code') }}</span>
+				<span class="is-sr-only">{{ $t('input.editor.code') }}</span>
 			</BaseButton>
 			<BaseButton
 				v-tooltip="$t('input.editor.quote')"
@@ -114,9 +114,9 @@
 				@click="editor.chain().focus().toggleBlockquote().run()"
 			>
 				<span class="icon">
-					<Icon :icon="['fa', 'fa-quote-right']" />
+					<Icon :icon="['fas', 'quote-right']" />
 				</span>
-				<span class="tw-sr-only">{{ $t('input.editor.quote') }}</span>
+				<span class="is-sr-only">{{ $t('input.editor.quote') }}</span>
 			</BaseButton>
 		</div>
 
@@ -128,9 +128,9 @@
 				@click="editor.chain().focus().toggleBulletList().run()"
 			>
 				<span class="icon">
-					<Icon :icon="['fa', 'fa-list-ul']" />
+					<Icon :icon="['fas', 'list-ul']" />
 				</span>
-				<span class="tw-sr-only">{{ $t('input.editor.bulletList') }}</span>
+				<span class="is-sr-only">{{ $t('input.editor.bulletList') }}</span>
 			</BaseButton>
 			<BaseButton
 				v-tooltip="$t('input.editor.orderedList')"
@@ -139,9 +139,9 @@
 				@click="editor.chain().focus().toggleOrderedList().run()"
 			>
 				<span class="icon">
-					<Icon :icon="['fa', 'fa-list-ol']" />
+					<Icon :icon="['fas', 'list-ol']" />
 				</span>
-				<span class="tw-sr-only">{{ $t('input.editor.orderedList') }}</span>
+				<span class="is-sr-only">{{ $t('input.editor.orderedList') }}</span>
 			</BaseButton>
 			<BaseButton
 				v-tooltip="$t('input.editor.taskList')"
@@ -150,9 +150,9 @@
 				@click="editor.chain().focus().toggleTaskList().run()"
 			>
 				<span class="icon">
-					<Icon icon="fa-list-check" />
+					<Icon icon="list-check" />
 				</span>
-				<span class="tw-sr-only">{{ $t('input.editor.taskList') }}</span>
+				<span class="is-sr-only">{{ $t('input.editor.taskList') }}</span>
 			</BaseButton>
 		</div>
 
@@ -163,9 +163,9 @@
 				@click="e => emit('imageUploadClicked', e)"
 			>
 				<span class="icon">
-					<Icon icon="fa-image" />
+					<Icon icon="image" />
 				</span>
-				<span class="tw-sr-only">{{ $t('input.editor.image') }}</span>
+				<span class="is-sr-only">{{ $t('input.editor.image') }}</span>
 			</BaseButton>
 		</div>
 
@@ -178,9 +178,9 @@
 				@click="setLink"
 			>
 				<span class="icon">
-					<Icon :icon="['fa', 'fa-link']" />
+					<Icon :icon="['fas', 'link']" />
 				</span>
-				<span class="tw-sr-only">{{ $t('input.editor.link') }}</span>
+				<span class="is-sr-only">{{ $t('input.editor.link') }}</span>
 			</BaseButton>
 			<BaseButton
 				v-tooltip="$t('input.editor.text')"
@@ -190,9 +190,9 @@
 				@click="editor.chain().focus().setParagraph().run()"
 			>
 				<span class="icon">
-					<Icon :icon="['fa', 'fa-paragraph']" />
+					<Icon :icon="['fas', 'paragraph']" />
 				</span>
-				<span class="tw-sr-only">{{ $t('input.editor.text') }}</span>
+				<span class="is-sr-only">{{ $t('input.editor.text') }}</span>
 			</BaseButton>
 
 			<BaseButton
@@ -201,9 +201,9 @@
 				@click="editor.chain().focus().setHorizontalRule().run()"
 			>
 				<span class="icon">
-					<Icon :icon="['fa', 'fa-ruler-horizontal']" />
+					<Icon :icon="['fas', 'ruler-horizontal']" />
 				</span>
-				<span class="tw-sr-only">{{ $t('input.editor.horizontalRule') }}</span>
+				<span class="is-sr-only">{{ $t('input.editor.horizontalRule') }}</span>
 			</BaseButton>
 		</div>
 
@@ -214,9 +214,9 @@
 				@click="editor.chain().focus().undo().run()"
 			>
 				<span class="icon">
-					<Icon :icon="['fa', 'fa-undo']" />
+					<Icon :icon="['fas', 'undo']" />
 				</span>
-				<span class="tw-sr-only">{{ $t('input.editor.undo') }}</span>
+				<span class="is-sr-only">{{ $t('input.editor.undo') }}</span>
 			</BaseButton>
 			<BaseButton
 				v-tooltip="$t('input.editor.redo')"
@@ -224,9 +224,9 @@
 				@click="editor.chain().focus().redo().run()"
 			>
 				<span class="icon">
-					<Icon :icon="['fa', 'fa-redo']" />
+					<Icon :icon="['fas', 'redo']" />
 				</span>
-				<span class="tw-sr-only">{{ $t('input.editor.redo') }}</span>
+				<span class="is-sr-only">{{ $t('input.editor.redo') }}</span>
 			</BaseButton>
 		</div>
 
@@ -239,9 +239,9 @@
 				@click="toggleTableMode"
 			>
 				<span class="icon">
-					<Icon :icon="['fa', 'fa-table']" />
+					<Icon :icon="['fas', 'table']" />
 				</span>
-				<span class="tw-sr-only">{{ $t('input.editor.table.title') }}</span>
+				<span class="is-sr-only">{{ $t('input.editor.table.title') }}</span>
 			</BaseButton>
 			<div
 				v-if="tableMode"
@@ -381,8 +381,8 @@ function toggleTableMode() {
 	tableMode.value = !tableMode.value
 }
 
-function setLink(event) {
-	setLinkInEditor(event.target.getBoundingClientRect(), props.editor)
+function setLink(event: MouseEvent) {
+	setLinkInEditor((event.target as HTMLElement).getBoundingClientRect(), props.editor)
 }
 </script>
 
@@ -397,21 +397,21 @@ function setLink(event) {
 	flex-wrap: wrap;
 
 	> * + * {
-		border-left: 1px solid var(--grey-200);
-		margin-left: 6px;
-		padding-left: 6px;
+		border-inline-start: 1px solid var(--grey-200);
+		margin-inline-start: 6px;
+		padding-inline-start: 6px;
 	}
 }
 
 .editor-toolbar__button {
-	min-width: 2rem;
-	height: 2rem;
+	min-inline-size: 2rem;
+	block-size: 2rem;
 	border-radius: $radius;
 	border: 1px solid transparent;
 	color: var(--grey-700);
 	transition: all $transition;
 	background: transparent;
-	margin-right: .25rem;
+	margin-inline-end: .25rem;
 
 	&:hover {
 		background: var(--grey-100);
@@ -424,23 +424,23 @@ function setLink(event) {
 		.icon__lower-text {
 			font-size: .75rem;
 			position: absolute;
-			bottom: -3px;
-			right: -2px;
+			inset-block-end: -3px;
+			inset-inline-end: -2px;
 			font-weight: bold;
 		}
 	}
 }
 
 .editor-toolbar__table-buttons {
-	margin-top: .5rem;
+	margin-block-start: .5rem;
 
 	> .editor-toolbar__button {
-		margin-right: .5rem;
-		margin-bottom: .5rem;
+		margin-inline-end: .5rem;
+		margin-block-end: .5rem;
 		padding: 0 .25rem;
 		border: 1px solid var(--grey-400);
 		font-size: .75rem;
-		height: 1.5rem;
+		block-size: 1.5rem;
 	}
 }
 </style>

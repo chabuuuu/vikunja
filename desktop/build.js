@@ -74,7 +74,7 @@ async function main() {
 	}
 
 	const versionPlaceholder = args[0]
-	const renameDistFiles = args[1] || false
+	const renameDistFiles = args[1] === 'true' || false
 	const frontendSourceDir = path.resolve(__dirname, '../frontend/dist')
 	const frontendDir = path.resolve(__dirname, 'frontend')
 	const indexFilePath = path.join(frontendDir, 'index.html')
@@ -106,7 +106,7 @@ async function main() {
 		console.log('Step 4: Installing dependencies and building...')
 		execSync('pnpm dist', {stdio: 'inherit'})
 
-		if (renameDistFiles) {
+		if (!renameDistFiles) {
 			console.log('Step 5: Renaming release files...')
 			await renameDistFilesToUnstable(versionPlaceholder)
 		}

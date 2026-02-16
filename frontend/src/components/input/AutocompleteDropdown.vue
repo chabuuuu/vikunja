@@ -1,4 +1,4 @@
-<script setup lang="ts" generic="T">
+<script setup lang="ts" generic="T extends string">
 import {type ComponentPublicInstance, nextTick, ref, watch} from 'vue'
 
 const props = withDefaults(defineProps<{
@@ -30,15 +30,21 @@ const editorRef = ref<HTMLTextAreaElement | null>(null)
 watch(
 	() => model.value,
 	newValue => {
-		val.value = newValue
+		val.value = newValue ?? ''
 	},
 )
 
 function updateSuggestionScroll() {
 	nextTick(() => {
 		const scroller = suggestionScrollerRef.value
-		const selectedItem = scroller?.querySelector('.selected')
-		scroller.scrollTop = selectedItem ? selectedItem.offsetTop : 0
+		if (!scroller) return
+
+		const selectedItem = scroller.querySelector('.selected')
+		if (selectedItem && selectedItem instanceof HTMLElement) {
+			scroller.scrollTop = selectedItem.offsetTop
+		} else {
+			scroller.scrollTop = 0
+		}
 	})
 }
 
@@ -53,7 +59,7 @@ function onFocusField() {
 	setState('focused')
 }
 
-function onKeydown(e) {
+function onKeydown(e: KeyboardEvent) {
 	switch (e.keyCode || e.which) {
 		case ESCAPE:
 			e.preventDefault()
@@ -116,9 +122,9 @@ function onSelectValue(value: T) {
 	setState('unfocused')
 }
 
-function onUpdateField(e) {
+function onUpdateField(e: Event) {
 	setState('focused')
-	model.value = e.currentTarget.value
+	model.value = (e.currentTarget as HTMLTextAreaElement).value
 }
 </script>
 
@@ -190,24 +196,23 @@ function onUpdateField(e) {
 		background: var(--white);
 		border-radius: 0 0 var(--input-radius) var(--input-radius);
 		border: 1px solid var(--primary);
-		border-top: none;
+		border-block-start: none;
 
-		max-height: 50vh;
+		max-block-size: 50vh;
 		overflow-x: auto;
 		z-index: 100;
-		max-width: 100%;
-		min-width: 100%;
-		margin-top: -2px;
+		max-inline-size: 100%;
+		min-inline-size: 100%;
+		margin-block-start: -2px;
+		margin-inline: -1px;
 
 		button {
-			width: 100%;
 			background: transparent;
-			border: 0;
 
 			font-size: .9rem;
-			width: 100%;
+			inline-size: 100%;
 			color: var(--grey-800);
-			text-align: left;
+			text-align: start;
 			box-shadow: none;
 			text-transform: none;
 			font-family: $family-sans-serif;

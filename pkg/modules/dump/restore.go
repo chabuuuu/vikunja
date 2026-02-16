@@ -32,6 +32,7 @@ import (
 
 	"github.com/hashicorp/go-version"
 
+	"code.vikunja.io/api/pkg/config"
 	"code.vikunja.io/api/pkg/db"
 	"code.vikunja.io/api/pkg/files"
 	"code.vikunja.io/api/pkg/initialize"
@@ -45,7 +46,7 @@ import (
 const maxConfigSize = 5 * 1024 * 1024 // 5 MB, should be largely enough
 
 // Restore takes a zip file name and restores it
-func Restore(filename string) error {
+func Restore(filename string, overrideConfig bool) error {
 
 	r, err := zip.OpenReader(filename)
 	if err != nil {
@@ -101,16 +102,24 @@ func Restore(filename string) error {
 
 	///////
 	// Restore the config file
-	err = restoreConfig(configFile, dotEnvFile)
-	if err != nil {
-		return err
+	if overrideConfig {
+		err = restoreConfig(configFile, dotEnvFile)
+		if err != nil {
+			return err
+		}
+	} else {
+		log.Warning("Preserving existing configuration (--preserve-config flag used)")
+		log.Warning("Configuration preserved - ensure your current config is compatible with the restored data")
 	}
 	log.Info("Restoring...")
 
 	// Init the configFile again since the restored configuration is most likely different from the one before
 	initialize.LightInit()
 	initialize.InitEngines()
-	files.InitFileHandler()
+	err = files.InitFileHandler()
+	if err != nil {
+		return fmt.Errorf("could not init file handler: %w", err)
+	}
 
 	///////
 	// Restore the db
@@ -166,18 +175,9 @@ func Restore(filename string) error {
 			return fmt.Errorf("could not parse file id %s: %w", i, err)
 		}
 
-		f := &files.File{ID: id}
-
-		fc, err := file.Open()
-		if err != nil {
-			return fmt.Errorf("could not open file %s: %w", i, err)
+		if err := restoreFile(id, file); err != nil {
+			return fmt.Errorf("could not restore file %s: %w", i, err)
 		}
-
-		if err := f.Save(fc); err != nil {
-			return fmt.Errorf("could not save file: %w", err)
-		}
-
-		_ = fc.Close()
 		log.Infof("Restored file %s", i)
 	}
 	log.Infof("Restored %d files.", len(filesFiles))
@@ -185,9 +185,103 @@ func Restore(filename string) error {
 	///////
 	// Done
 	log.Infof("Done restoring dump.")
-	log.Infof("Restart Vikunja to make sure the new configuration file is applied.")
+	if overrideConfig {
+		log.Infof("Restart Vikunja to make sure the new configuration file is applied.")
+	}
 
 	return nil
+}
+
+func restoreFile(id int64, zipFile *zip.File) error {
+	f := &files.File{ID: id}
+
+	fc, err := zipFile.Open()
+	if err != nil {
+		return fmt.Errorf("could not open zip entry: %w", err)
+	}
+	defer fc.Close()
+
+	// Create a temporary file to make the content seekable without loading
+	// it all into memory. zip.File.Open() returns io.ReadCloser which is not
+	// seekable, but f.Save requires io.ReadSeeker.
+	tmpFile, err := os.CreateTemp("", "vikunja-restore-*")
+	if err != nil {
+		return fmt.Errorf("could not create temp file: %w", err)
+	}
+	defer func() {
+		_ = tmpFile.Close()
+		_ = os.Remove(tmpFile.Name())
+	}()
+
+	// Limit copy size to prevent decompression bombs
+	maxSize := config.GetMaxFileSizeInMBytes() * 1024 * 1024
+	written, err := io.CopyN(tmpFile, fc, int64(maxSize)+1) // #nosec G115 -- maxSize is configured, not user input
+	if err != nil && !errors.Is(err, io.EOF) {
+		return fmt.Errorf("could not copy to temp file: %w", err)
+	}
+	if uint64(written) > maxSize {
+		return files.ErrFileIsTooLarge{Size: uint64(written)}
+	}
+
+	if _, err := tmpFile.Seek(0, io.SeekStart); err != nil {
+		return fmt.Errorf("could not seek temp file: %w", err)
+	}
+
+	return f.Save(tmpFile)
+}
+
+func convertFieldValue(fieldName string, value interface{}, isFloat bool) (interface{}, error) {
+	// Check if this is a float field and the value is already a number
+	if isFloat {
+		switch v := value.(type) {
+		case float64:
+			// Already a float64, no need to process
+			return v, nil
+		case int:
+			// Convert int to float64
+			return float64(v), nil
+		case string:
+			// Try to decode from base64 string and convert to float
+			decoded, err := base64.StdEncoding.DecodeString(v)
+			if err != nil {
+				var corruptErr base64.CorruptInputError
+				if !errors.As(err, &corruptErr) {
+					return nil, fmt.Errorf("could not decode field '%s' %s: %w", fieldName, value, err)
+				}
+				// If it's a CorruptInputError, treat the string as raw data
+				decoded = []byte(v)
+			}
+			val, err := strconv.ParseFloat(string(decoded), 64)
+			if err != nil {
+				return nil, fmt.Errorf("could not parse double value for field '%s': %w", fieldName, err)
+			}
+			return val, nil
+		default:
+			return nil, fmt.Errorf("unexpected type for float field '%s': %T", fieldName, v)
+		}
+	}
+
+	// Handle JSON fields (non-float)
+	switch v := value.(type) {
+	case string:
+		// Check if the string is "null" (case insensitive) and return nil for SQL NULL
+		if strings.ToLower(v) == "null" {
+			return nil, nil
+		}
+
+		decoded, err := base64.StdEncoding.DecodeString(v)
+		if err != nil {
+			var corruptErr base64.CorruptInputError
+			if !errors.As(err, &corruptErr) {
+				return nil, fmt.Errorf("could not decode field '%s' %s: %w", fieldName, value, err)
+			}
+			// If it's a CorruptInputError, treat the string as raw data
+			decoded = []byte(v)
+		}
+		return string(decoded), nil
+	default:
+		return nil, fmt.Errorf("expected string for JSON field '%s', got %T", fieldName, v)
+	}
 }
 
 func restoreTableData(tables map[string]*zip.File) error {
@@ -221,25 +315,11 @@ func restoreTableData(tables map[string]*zip.File) error {
 						continue
 					}
 
-					var decoded []byte
-					decoded, err = base64.StdEncoding.DecodeString(content[i][f].(string))
-					if err != nil && !errors.Is(err, base64.CorruptInputError(0)) {
-						return fmt.Errorf("could not decode field '%s' %s: %w", f, content[i][f], err)
+					convertedValue, err := convertFieldValue(f, content[i][f], isFloat)
+					if err != nil {
+						return err
 					}
-
-					if err != nil && errors.Is(err, base64.CorruptInputError(0)) {
-						decoded = []byte(content[i][f].(string))
-					}
-
-					if isFloat {
-						val, err := strconv.ParseFloat(string(decoded), 64)
-						if err != nil {
-							return fmt.Errorf("could not parse double value for field '%s': %w", f, err)
-						}
-						content[i][f] = val
-					} else {
-						content[i][f] = string(decoded)
-					}
+					content[i][f] = convertedValue
 				}
 			}
 			return nil

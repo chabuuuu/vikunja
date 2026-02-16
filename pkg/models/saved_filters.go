@@ -53,8 +53,8 @@ type SavedFilter struct {
 	// A timestamp when this filter was last updated. You cannot change this value.
 	Updated time.Time `xorm:"updated not null" json:"updated"`
 
-	web.CRUDable `xorm:"-" json:"-"`
-	web.Rights   `xorm:"-" json:"-"`
+	web.CRUDable    `xorm:"-" json:"-"`
+	web.Permissions `xorm:"-" json:"-"`
 }
 
 // TableName returns a better table name for saved filters
@@ -170,7 +170,7 @@ func GetSavedFilterSimpleByID(s *xorm.Session, id int64) (sf *SavedFilter, err e
 // @Failure 500 {object} models.Message "Internal error"
 // @Router /filters/{id} [get]
 func (sf *SavedFilter) ReadOne(s *xorm.Session, _ web.Auth) error {
-	// s already contains almost the full saved filter from the rights check, we only need to add the user
+	// s already contains almost the full saved filter from the permissions check, we only need to add the user
 	u, err := user.GetUserByID(s, sf.OwnerID)
 	sf.Owner = u
 	return err
@@ -194,6 +194,8 @@ func (sf *SavedFilter) Update(s *xorm.Session, _ web.Auth) error {
 	if err != nil {
 		return err
 	}
+
+	sf.OwnerID = origFilter.OwnerID
 
 	if sf.Filters == nil {
 		sf.Filters = origFilter.Filters
@@ -240,9 +242,6 @@ func (sf *SavedFilter) Update(s *xorm.Session, _ web.Auth) error {
 		return err
 	}
 
-	taskBuckets := []*TaskBucket{}
-	taskPositions := []*TaskPosition{}
-
 	for _, view := range kanbanFilterViews {
 		// Fetch all tasks in the filter but not in task_bucket
 		// select * from tasks where id not in (select task_id from task_buckets where project_view_id = ?) and FILTER_COND
@@ -265,29 +264,27 @@ func (sf *SavedFilter) Update(s *xorm.Session, _ web.Auth) error {
 			return err
 		}
 
+		taskBuckets := make([]*TaskBucket, 0, len(tasksToAdd))
 		for _, task := range tasksToAdd {
 			taskBuckets = append(taskBuckets, &TaskBucket{
 				TaskID:        task.ID,
 				BucketID:      bucketID,
 				ProjectViewID: view.ID,
 			})
-
-			taskPositions = append(taskPositions, &TaskPosition{
-				TaskID:        task.ID,
-				ProjectViewID: view.ID,
-				Position:      0,
-			})
 		}
-	}
 
-	if len(taskBuckets) > 0 && len(taskPositions) > 0 {
-		_, err = s.Insert(taskBuckets)
-		if err != nil {
-			return err
+		if len(taskBuckets) > 0 {
+			if _, err = s.Insert(taskBuckets); err != nil {
+				return err
+			}
 		}
-		_, err = s.Insert(taskPositions)
-		if err != nil {
-			return err
+
+		// Recalculate positions for all tasks - this will create positions for
+		// new tasks that don't have them yet
+		if len(tasksToAdd) > 0 {
+			if err = RecalculateTaskPositions(s, view, &user.User{ID: sf.OwnerID}); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -374,10 +371,9 @@ func addTaskToFilter(s *xorm.Session, filter *SavedFilter, view *ProjectView, fa
 		return nil, nil, err
 	}
 	if !existingTaskPosition {
-		taskPosition = &TaskPosition{
-			TaskID:        task.ID,
-			ProjectViewID: view.ID,
-			Position:      calculateDefaultPosition(task.Index, task.Position),
+		taskPosition, err = calculateNewPositionForTask(s, &user.User{ID: filter.OwnerID}, task, view)
+		if err != nil {
+			return nil, nil, err
 		}
 	}
 
@@ -436,6 +432,10 @@ func RegisterAddTaskToFilterViewCron() {
 		newTaskPositions := []*TaskPosition{}
 		deleteCond := []builder.Cond{}
 		taskIDsToRemove := []int64{}
+		viewsToRecalc := map[int64]struct {
+			view    *ProjectView
+			ownerID int64
+		}{}
 		for _, view := range kanbanFilterViews {
 			filterID := GetSavedFilterIDFromProjectID(view.ProjectID)
 			filter, exists := filters[filterID]
@@ -497,12 +497,14 @@ func RegisterAddTaskToFilterViewCron() {
 					newTaskBuckets = append(newTaskBuckets, tb)
 				}
 				if _, exists := savedTaskPositionMap[task.ID]; !exists {
-					tp := &TaskPosition{
-						TaskID:        task.ID,
-						ProjectViewID: view.ID,
-						Position:      task.Position,
+					// Mark view for recalculation - RecalculateTaskPositions will create
+					// positions for all tasks including new ones
+					if _, ok := viewsToRecalc[view.ID]; !ok {
+						viewsToRecalc[view.ID] = struct {
+							view    *ProjectView
+							ownerID int64
+						}{view: view, ownerID: filter.OwnerID}
 					}
-					newTaskPositions = append(newTaskPositions, tp)
 				}
 			}
 
@@ -526,6 +528,12 @@ func RegisterAddTaskToFilterViewCron() {
 		}
 
 		upsertRelatedTaskProperties(s, logPrefix, newTaskBuckets, newTaskPositions, deleteCond, taskIDsToRemove)
+
+		for _, data := range viewsToRecalc {
+			if err := RecalculateTaskPositions(s, data.view, &user.User{ID: data.ownerID}); err != nil {
+				log.Errorf("%sError recalculating task positions for view %d: %s", logPrefix, data.view.ID, err)
+			}
+		}
 	})
 	if err != nil {
 		log.Fatalf("Could register add task to filter view cron: %s", err)
@@ -546,7 +554,6 @@ func upsertRelatedTaskProperties(s *xorm.Session, logPrefix string, newTaskBucke
 			log.Errorf("%sError inserting task positions: %s", logPrefix, err)
 		}
 	}
-
 	if len(deleteCond) > 0 {
 		_, err = s.Where(builder.Or(deleteCond...)).Delete(&TaskBucket{})
 		if err != nil {

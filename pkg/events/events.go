@@ -51,7 +51,7 @@ func (m *messageHandleFailedError) Error() string {
 
 // InitEvents sets up everything needed to work with events
 func InitEvents() (err error) {
-	logger := log.NewWatermillLogger(config.LogEnabled.GetBool(), config.LogEvents.GetString(), config.LogEventsLevel.GetString())
+	logger := log.NewWatermillLogger(config.LogEnabled.GetBool(), config.LogEvents.GetString(), config.LogEventsLevel.GetString(), config.LogFormat.GetString())
 
 	router, err := message.NewRouter(
 		message.RouterConfig{},
@@ -75,7 +75,7 @@ func InitEvents() (err error) {
 	if err != nil {
 		return err
 	}
-	router.AddNoPublisherHandler("poison.logger", "poison", pubsub, func(msg *message.Message) error {
+	router.AddConsumerHandler("poison.logger", "poison", pubsub, func(msg *message.Message) error {
 		meta := ""
 		for s, m := range msg.Metadata {
 			meta += s + "=" + m + ", "
@@ -106,7 +106,7 @@ func InitEvents() (err error) {
 
 	for topic, funcs := range listeners {
 		for _, handler := range funcs {
-			router.AddNoPublisherHandler(topic+"."+handler.Name(), topic, pubsub, handler.Handle)
+			router.AddConsumerHandler(topic+"."+handler.Name(), topic, pubsub, handler.Handle)
 		}
 	}
 

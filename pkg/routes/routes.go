@@ -21,9 +21,9 @@
 // @description Every endpoint capable of pagination will return two headers:
 // @description * `x-pagination-total-pages`: The total number of available pages for this request
 // @description * `x-pagination-result-count`: The number of items returned for this request.
-// @description # Rights
-// @description All endpoints which return a single item (project, task, etc.) - no array - will also return a `x-max-right` header with the max right the user has on this item as an int where `0` is `Read Only`, `1` is `Read & Write` and `2` is `Admin`.
-// @description This can be used to show or hide ui elements based on the rights the user has.
+// @description # Permissions
+// @description All endpoints which return a single item (project, task, etc.) - no array - will also return a `x-max-permission` header with the max permission the user has on this item as an int where `0` is `Read Only`, `1` is `Read & Write` and `2` is `Admin`.
+// @description This can be used to show or hide ui elements based on the permissions the user has.
 // @description # Errors
 // @description All errors have an error code and a human-readable error message in addition to the http status code. You should always check for the status code in the response, not only the http status code.
 // @description Due to limitations in the swagger library we're using for this document, only one error per http status code is documented here. Make sure to check the [error docs](https://vikunja.io/docs/errors/) in Vikunja's documentation for a full list of available error codes.
@@ -52,8 +52,8 @@
 package routes
 
 import (
-	"errors"
-	"net/url"
+	"context"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -72,39 +72,89 @@ import (
 	"code.vikunja.io/api/pkg/modules/migration/todoist"
 	"code.vikunja.io/api/pkg/modules/migration/trello"
 	vikunja_file "code.vikunja.io/api/pkg/modules/migration/vikunja-file"
+	"code.vikunja.io/api/pkg/plugins"
 	apiv1 "code.vikunja.io/api/pkg/routes/api/v1"
 	"code.vikunja.io/api/pkg/routes/caldav"
 	"code.vikunja.io/api/pkg/version"
 	"code.vikunja.io/api/pkg/web/handler"
 
 	"github.com/getsentry/sentry-go"
-	sentryecho "github.com/getsentry/sentry-go/echo"
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
-	elog "github.com/labstack/gommon/log"
+	"github.com/labstack/echo/v5"
+	"github.com/labstack/echo/v5/middleware"
 	"github.com/ulule/limiter/v3"
 )
 
+// matchCORSOrigin checks if an origin matches any of the allowed origin patterns.
+// It supports wildcards in the port position (e.g., "http://127.0.0.1:*").
+func matchCORSOrigin(origin string, allowedOrigins []string) (string, bool, error) {
+	for _, pattern := range allowedOrigins {
+		// Exact match
+		if origin == pattern {
+			return origin, true, nil
+		}
+		// Allow all
+		if pattern == "*" {
+			return origin, true, nil
+		}
+		// Handle wildcard port patterns like "http://127.0.0.1:*" or "http://localhost:*"
+		if strings.HasSuffix(pattern, ":*") {
+			prefix := strings.TrimSuffix(pattern, ":*")
+			// Check if the origin starts with the prefix and has a port after
+			if strings.HasPrefix(origin, prefix+":") {
+				return origin, true, nil
+			}
+			// Also match if origin has no port but pattern allows any port
+			if origin == prefix {
+				return origin, true, nil
+			}
+		}
+	}
+	return "", false, nil
+}
+
 // NewEcho registers a new Echo instance
 func NewEcho() *echo.Echo {
-	e := echo.New()
+	// Configure Echo with a router that unescapes path parameters.
+	// This is needed because Echo v5 does not unescape path params by default.
+	// Without this, path parameters like usernames with spaces or apostrophes
+	// would remain URL-encoded (e.g., "John%20D%27Urso" instead of "John D'Urso").
+	// See https://kolaente.dev/vikunja/vikunja/issues/1224
+	e := echo.NewWithConfig(echo.Config{
+		Router: echo.NewRouter(echo.RouterConfig{
+			UnescapePathParamValues: true,
+		}),
+	})
 
-	e.HideBanner = true
-
-	if l, ok := e.Logger.(*elog.Logger); ok {
-		if !config.LogEnabled.GetBool() || config.LogEcho.GetString() == "off" {
-			l.SetLevel(elog.OFF)
-		}
-		l.EnableColor()
-		l.SetHeader(log.ErrFmt)
-		l.SetOutput(log.GetLogWriter(config.LogEcho.GetString(), "echo"))
-	}
+	e.Logger = log.NewEchoLogger(config.LogEnabled.GetBool(), config.LogHTTP.GetString(), config.LogFormat.GetString())
 
 	// Logger
-	if !config.LogEnabled.GetBool() || config.LogHTTP.GetString() != "off" {
-		e.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{
-			Format: log.WebFmt + "\n",
-			Output: log.GetLogWriter(config.LogHTTP.GetString(), "http"),
+	if config.LogEnabled.GetBool() && config.LogHTTP.GetString() != "off" {
+		httpLogger := log.NewHTTPLogger(config.LogEnabled.GetBool(), config.LogHTTP.GetString(), config.LogFormat.GetString())
+		e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
+			LogStatus:   true,
+			LogURI:      true,
+			LogMethod:   true,
+			LogLatency:  true,
+			HandleError: true,
+			LogValuesFunc: func(_ *echo.Context, v middleware.RequestLoggerValues) error {
+				if v.Error == nil {
+					httpLogger.LogAttrs(context.Background(), slog.LevelInfo, "",
+						slog.String("method", v.Method),
+						slog.String("uri", v.URI),
+						slog.Int("status", v.Status),
+						slog.Duration("latency", v.Latency),
+					)
+				} else {
+					httpLogger.LogAttrs(context.Background(), slog.LevelError, "",
+						slog.String("method", v.Method),
+						slog.String("uri", v.URI),
+						slog.Int("status", v.Status),
+						slog.Duration("latency", v.Latency),
+						slog.String("err", v.Error.Error()),
+					)
+				}
+				return nil
+			},
 		}))
 	}
 
@@ -115,6 +165,15 @@ func NewEcho() *echo.Echo {
 
 	// Validation
 	e.Validator = &CustomValidator{}
+
+	// Set body limit to allow file uploads up to the configured size
+	// Add some overhead for multipart form data (headers, boundaries, etc.)
+	maxFileSize := config.GetMaxFileSizeInMBytes()
+	// #nosec G115 - maxFileSize is a configuration value that won't exceed int64 max in practice
+	e.Use(middleware.BodyLimit((int64(maxFileSize) + 2) * 1024 * 1024))
+
+	// Set up centralized error handler
+	e.HTTPErrorHandler = CreateHTTPErrorHandler(e, config.SentryEnabled.GetBool())
 
 	return e
 }
@@ -133,33 +192,9 @@ func setupSentry(e *echo.Echo) {
 	}
 	defer sentry.Flush(5 * time.Second)
 
-	e.Use(sentryecho.New(sentryecho.Options{
+	e.Use(SentryMiddleware(SentryOptions{
 		Repanic: true,
 	}))
-
-	e.HTTPErrorHandler = func(err error, c echo.Context) {
-		// Only capture errors not already handled by echo
-		var herr *echo.HTTPError
-		if errors.As(err, &herr) && herr.Code > 499 {
-			var errToReport = err
-			if herr.Internal == nil {
-				errToReport = herr.Internal
-			}
-
-			hub := sentryecho.GetHubFromContext(c)
-			if hub != nil {
-				hub.WithScope(func(scope *sentry.Scope) {
-					scope.SetExtra("url", c.Request().URL)
-					hub.CaptureException(errToReport)
-				})
-			} else {
-				sentry.CaptureException(errToReport)
-				log.Debugf("Could not add context for sending error '%s' to sentry", err.Error())
-			}
-			log.Debugf("Error '%s' sent to sentry", err.Error())
-		}
-		e.DefaultHTTPErrorHandler(err, c)
-	}
 }
 
 // RegisterRoutes registers all routes for the application
@@ -182,11 +217,18 @@ func RegisterRoutes(e *echo.Echo) {
 
 	// CORS
 	if config.CorsEnable.GetBool() {
-		log.Debugf("CORS enabled with origins: %s", strings.Join(config.CorsOrigins.GetStringSlice(), ", "))
+		allowedOrigins := config.CorsOrigins.GetStringSlice()
+		log.Infof("CORS enabled with origins: %s", strings.Join(allowedOrigins, ", "))
+
+		// Echo v5 CORS middleware is stricter and doesn't accept wildcards in ports like "http://127.0.0.1:*"
+		// We use UnsafeAllowOriginFunc to handle these patterns for backwards compatibility
 		e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-			AllowOrigins: config.CorsOrigins.GetStringSlice(),
-			MaxAge:       config.CorsMaxAge.GetInt(),
-			Skipper: func(context echo.Context) bool {
+			AllowOrigins: []string{}, // Empty because we use UnsafeAllowOriginFunc
+			UnsafeAllowOriginFunc: func(_ *echo.Context, origin string) (string, bool, error) {
+				return matchCORSOrigin(origin, allowedOrigins)
+			},
+			MaxAge: config.CorsMaxAge.GetInt(),
+			Skipper: func(context *echo.Context) bool {
 				// Since it is not possible to register this middleware just for the api group,
 				// we just disable it when for caldav requests.
 				// Caldav requires OPTIONS requests to be answered in a specific manner,
@@ -198,10 +240,45 @@ func RegisterRoutes(e *echo.Echo) {
 
 	// API Routes
 	a := e.Group("/api/v1")
-	e.OnAddRouteHandler = func(_ string, route echo.Route, _ echo.HandlerFunc, middlewares []echo.MiddlewareFunc) {
-		models.CollectRoutesForAPITokenUsage(route, middlewares)
-	}
 	registerAPIRoutes(a)
+
+	// Collect routes for API token permissions
+	// In Echo v5, we collect routes after registration using e.Router().Routes()
+	collectRoutesForAPITokens(e)
+}
+
+// unauthenticatedAPIPaths contains paths that don't require JWT authentication
+var unauthenticatedAPIPaths = map[string]bool{
+	"/api/v1/register":                       true,
+	"/api/v1/user/password/token":            true,
+	"/api/v1/user/password/reset":            true,
+	"/api/v1/user/confirm":                   true,
+	"/api/v1/login":                          true,
+	"/api/v1/auth/openid/:provider/callback": true,
+	"/api/v1/test/:table":                    true,
+	"/api/v1/info":                           true,
+	"/api/v1/shares/:share/auth":             true,
+	"/api/v1/docs.json":                      true,
+	"/api/v1/docs":                           true,
+	"/api/v1/metrics":                        true,
+}
+
+// collectRoutesForAPITokens collects all routes for API token permission checking.
+// In Echo v5, OnAddRouteHandler was removed, so we collect routes after registration.
+func collectRoutesForAPITokens(e *echo.Echo) {
+	routeList := e.Router().Routes()
+	log.Debugf("Collecting %d routes for API token usage", len(routeList))
+	for _, route := range routeList {
+		// Only process API routes
+		if !strings.HasPrefix(route.Path, "/api/v1") {
+			continue
+		}
+
+		// Check if this route requires JWT authentication
+		requiresJWT := !unauthenticatedAPIPaths[route.Path]
+
+		models.CollectRoutesForAPITokenUsage(route, requiresJWT)
+	}
 }
 
 func registerAPIRoutes(a *echo.Group) {
@@ -210,25 +287,6 @@ func registerAPIRoutes(a *echo.Group) {
 	// It is its own group to be able to rate limit this based on different heuristics
 	n := a.Group("")
 	setupRateLimit(n, "ip")
-
-	// Echo does not unescape url path params by default. To make sure values bound as :param in urls are passed
-	// properly to handlers, we use this middleware to unescape them.
-	// See https://kolaente.dev/vikunja/vikunja/issues/1224
-	// See https://github.com/labstack/echo/issues/766
-	a.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-			params := make([]string, 0, len(c.ParamValues()))
-			for _, param := range c.ParamValues() {
-				p, err := url.PathUnescape(param)
-				if err != nil {
-					return err
-				}
-				params = append(params, p)
-			}
-			c.SetParamValues(params...)
-			return next(c)
-		}
-	})
 
 	// Docs
 	n.GET("/docs.json", apiv1.DocsJSON)
@@ -304,6 +362,7 @@ func registerAPIRoutes(a *echo.Group) {
 	u.POST("/settings/general", apiv1.UpdateGeneralUserSettings)
 	u.POST("/export/request", apiv1.RequestUserDataExport)
 	u.POST("/export/download", apiv1.DownloadUserDataExport)
+	u.GET("/export", apiv1.GetUserExportStatus)
 	u.GET("/timezones", apiv1.GetAvailableTimezones)
 	u.PUT("/settings/token/caldav", apiv1.GenerateCaldavToken)
 	u.GET("/settings/token/caldav", apiv1.GetCaldavTokens)
@@ -380,9 +439,17 @@ func registerAPIRoutes(a *echo.Group) {
 	}
 	a.PUT("/projects/:project/tasks", taskHandler.CreateWeb)
 	a.GET("/tasks/:projecttask", taskHandler.ReadOneWeb)
-	a.GET("/tasks/all", taskCollectionHandler.ReadAllWeb)
+	a.GET("/tasks", taskCollectionHandler.ReadAllWeb)
 	a.DELETE("/tasks/:projecttask", taskHandler.DeleteWeb)
 	a.POST("/tasks/:projecttask", taskHandler.UpdateWeb)
+
+	taskUnreadStatusHandler := &handler.WebHandler{
+		EmptyStruct: func() handler.CObject {
+			return &models.TaskUnreadStatus{}
+		},
+	}
+
+	a.POST("/tasks/:projecttask/read", taskUnreadStatusHandler.UpdateWeb)
 
 	taskPositionHandler := &handler.WebHandler{
 		EmptyStruct: func() handler.CObject {
@@ -625,6 +692,17 @@ func registerAPIRoutes(a *echo.Group) {
 		},
 	}
 	a.POST("/projects/:project/views/:view/buckets/:bucket/tasks", taskBucketProvider.UpdateWeb)
+
+	// Plugin routes
+	if config.PluginsEnabled.GetBool() {
+		// Authenticated plugin routes
+		authenticatedPluginGroup := a.Group("/plugins")
+
+		// Unauthenticated plugin routes (with basic IP rate limiting)
+		unauthenticatedPluginGroup := n.Group("/plugins")
+
+		plugins.RegisterPluginRoutes(authenticatedPluginGroup, unauthenticatedPluginGroup)
+	}
 }
 
 func registerMigrations(m *echo.Group) {

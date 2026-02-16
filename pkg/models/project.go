@@ -77,21 +77,21 @@ type Project struct {
 
 	Views []*ProjectView `xorm:"-" json:"views"`
 
-	Expand   ProjectExpandable `xorm:"-" json:"-" query:"expand"`
-	MaxRight Right             `xorm:"-" json:"max_right"`
+	Expand        ProjectExpandable `xorm:"-" json:"-" query:"expand"`
+	MaxPermission Permission        `xorm:"-" json:"max_permission"`
 
 	// A timestamp when this project was created. You cannot change this value.
 	Created time.Time `xorm:"created not null" json:"created"`
 	// A timestamp when this project was last updated. You cannot change this value.
 	Updated time.Time `xorm:"updated not null" json:"updated"`
 
-	web.CRUDable `xorm:"-" json:"-"`
-	web.Rights   `xorm:"-" json:"-"`
+	web.CRUDable    `xorm:"-" json:"-"`
+	web.Permissions `xorm:"-" json:"-"`
 }
 
 type ProjectExpandable string
 
-const ProjectExpandableRights = `rights`
+const ProjectExpandableRights = `permissions`
 
 type ProjectWithTasksAndBuckets struct {
 	Project
@@ -168,7 +168,7 @@ var FavoritesPseudoProject = Project{
 // @Param per_page query int false "The maximum number of items per page. Note this parameter is limited by the configured maximum of items per page."
 // @Param s query string false "Search projects by title."
 // @Param is_archived query bool false "If true, also returns all archived projects."
-// @Param expand query string false "If set to `rights`, Vikunja will return the max right the current user has on this project. You can currently only set this to `rights`."
+// @Param expand query string false "If set to `permissions`, Vikunja will return the max permission the current user has on this project. You can currently only set this to `permissions`."
 // @Security JWTKeyAuth
 // @Success 200 {array} models.Project "The projects"
 // @Failure 403 {object} web.HTTPError "The user does not have access to the project"
@@ -200,13 +200,13 @@ func (p *Project) ReadAll(s *xorm.Session, a web.Auth, search string, page int, 
 		if err != nil {
 			return
 		}
-		err = addMaxRightToProjects(s, prs, doer)
+		err = addMaxPermissionToProjects(s, prs, doer)
 		if err != nil {
 			return
 		}
 	} else {
 		for _, pr := range prs {
-			pr.MaxRight = RightUnknown
+			pr.MaxPermission = PermissionUnknown
 		}
 	}
 
@@ -295,6 +295,7 @@ func (p *Project) ReadOne(s *xorm.Session, a web.Auth) (err error) {
 		}
 		p.Title = sf.Title
 		p.Description = sf.Description
+		p.IsFavorite = sf.IsFavorite
 		p.Created = sf.Created
 		p.Updated = sf.Updated
 		p.OwnerID = sf.OwnerID
@@ -334,9 +335,13 @@ func (p *Project) ReadOne(s *xorm.Session, a web.Auth) (err error) {
 		}
 	}
 
-	p.IsFavorite, err = isFavorite(s, p.ID, a, FavoriteKindProject)
-	if err != nil {
-		return
+	// For saved filters, IsFavorite was already set from the SavedFilter struct.
+	// Don't overwrite it with the project favorites lookup.
+	if !isFilter {
+		p.IsFavorite, err = isFavorite(s, p.ID, a, FavoriteKindProject)
+		if err != nil {
+			return
+		}
 	}
 
 	subs, err := GetSubscriptionForUser(s, SubscriptionEntityProject, p.ID, a)
@@ -472,9 +477,19 @@ func getUserProjectsStatement(userID int64, search string, getArchived bool) *bu
 			ids = append(ids, v)
 		}
 
-		filterCond := db.ILIKE("l.title", search)
+		var filterCond builder.Cond
 		if len(ids) > 0 {
 			filterCond = builder.In("l.id", ids)
+		} else {
+			filterCond = db.MultiFieldSearchWithTableAlias(
+				[]string{
+					"title",
+					"description",
+					"identifier",
+				},
+				search,
+				"l",
+			)
 		}
 
 		parentCondition := builder.Or(
@@ -755,25 +770,25 @@ func addProjectDetails(s *xorm.Session, projects []*Project, a web.Auth) (err er
 	return
 }
 
-func addMaxRightToProjects(s *xorm.Session, projects []*Project, u *user.User) (err error) {
+func addMaxPermissionToProjects(s *xorm.Session, projects []*Project, u *user.User) (err error) {
 	projectIDs := make([]int64, 0, len(projects))
 	for _, project := range projects {
 		if GetSavedFilterIDFromProjectID(project.ID) > 0 {
-			project.MaxRight = RightAdmin
+			project.MaxPermission = PermissionAdmin
 			continue
 		}
 		projectIDs = append(projectIDs, project.ID)
 	}
 
-	rights, err := checkRightsForProjects(s, u, projectIDs)
+	permissions, err := checkPermissionsForProjects(s, u, projectIDs)
 	if err != nil {
 		return err
 	}
 
 	for _, project := range projects {
-		right, has := rights[project.ID]
+		permission, has := permissions[project.ID]
 		if has {
-			project.MaxRight = right.MaxRight
+			project.MaxPermission = permission.MaxPermission
 		}
 	}
 

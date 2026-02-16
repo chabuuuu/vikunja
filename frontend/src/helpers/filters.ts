@@ -1,5 +1,16 @@
 import {snakeCase} from 'change-case'
 
+function trimQuotes(str: string): string {
+
+	str = str.trim()
+
+	if ((str.startsWith('"') && str.endsWith('"')) || 
+		(str.startsWith('\'') && str.endsWith('\''))) {
+		return str.slice(1, -1)
+	}
+	return str
+}
+
 export const DATE_FIELDS = [
 	'dueDate',
 	'startDate',
@@ -58,14 +69,19 @@ export const FILTER_JOIN_OPERATOR = [
 	')',
 ]
 
-export const FILTER_OPERATORS_REGEX = '(&lt;|&gt;|&lt;=|&gt;=|=|!=|not in|in)'
+export const FILTER_OPERATORS_REGEX = '('+FILTER_OPERATORS.map(op => {
+	// Only add word boundaries for operators that are words (like 'in', 'like', 'not in')
+	const needsWordBoundary = /^[a-zA-Z]/.test(op) || /[a-zA-Z]$/.test(op)
+	const escaped = op.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+	return needsWordBoundary ? '\\b' + escaped + '\\b' : escaped
+}).join('|')+')'
 
 export function hasFilterQuery(filter: string): boolean {
 	return FILTER_OPERATORS.find(o => filter.includes(o)) || false
 }
 
 export function getFilterFieldRegexPattern(field: string): RegExp {
-	return new RegExp('(' + field + '\\s*' + FILTER_OPERATORS_REGEX + '\\s*)([\'"]?)([^\'"&|()<]+\\1?)?', 'ig')
+	return new RegExp('\\b(' + field + ')\\s*' + FILTER_OPERATORS_REGEX + '\\s*(?:(["\'])((?:\\\\.|(?!\\3)[^\\\\])*?)\\3|([^&|()<]+?))(?=\\s*(?:&&|\\||\\)|$))', 'g')
 }
 
 export function transformFilterStringForApi(
@@ -81,7 +97,8 @@ export function transformFilterStringForApi(
 	}
 
 	AVAILABLE_FILTER_FIELDS.forEach(f => {
-		filter = filter.replace(new RegExp(f, 'ig'), f)
+		const fieldPattern = new RegExp('\\b(' + f + ')\\b(?=\\s*' + FILTER_OPERATORS_REGEX + ')', 'gi')
+		filter = filter.replace(fieldPattern, f)
 	})
 
 	// Transform labels and projects to ids
@@ -97,31 +114,49 @@ export function transformFilterStringForApi(
 			const replacements: { start: number, length: number, replacement: string }[] = []
 
 			while ((match = pattern.exec(filter)) !== null) {
-				// eslint-disable-next-line @typescript-eslint/no-unused-vars
-				const [matched, prefix, operator, space, keyword] = match
+				const [matched, fieldName, operator, _quotes, quotedContent, unquotedContent] = match
+				const keyword = quotedContent || unquotedContent
 				if (!keyword) {
 					continue
 				}
 
 				let keywords = [keyword.trim()]
-				if (operator === 'in' || operator === '?=' || operator === 'not in' || operator === '?!=') {
-					keywords = keyword.trim().split(',').map(k => k.trim())
+				if (isMultiValueOperator(operator)) {
+					keywords = keyword.trim().split(',').map(k => trimQuotes(k))
 				}
 
 				let replaced = keyword
 
+				const transformedKeywords: string[] = []
 				keywords.forEach(k => {
-					const id = resolver(k)
-					if (id !== null) {
-						replaced = replaced.replace(k, String(id))
+					let id = resolver(k)
+					if (id === null && k.includes('\\')) {
+						id = resolver(k.replaceAll('\\', ''))
 					}
+					if (id === null) {
+						transformedKeywords.push(k)
+						return
+					}
+				
+					transformedKeywords.push(String(id))
 				})
+				
+				// Join the transformed keywords back together
+				if (isMultiValueOperator(operator)) {
+					replaced = transformedKeywords.join(', ')
+				} else {
+					replaced = transformedKeywords[0] || keyword
+				}
 
-				const actualKeywordStart = (match?.index || 0) + prefix.length
+				replaced = replaced.replaceAll('"', '').replaceAll('\'', '')
+
+				// Reconstruct the entire match with the replaced value
+				const reconstructedMatch = `${fieldName} ${operator} ${replaced}`
+
 				replacements.push({
-					start: actualKeywordStart,
-					length: keyword.length,
-					replacement: replaced,
+					start: match.index!,
+					length: matched.length,
+					replacement: reconstructedMatch,
 				})
 			}
 
@@ -144,9 +179,10 @@ export function transformFilterStringForApi(
 	// Transform projects to ids
 	filter = transformFieldToIds(PROJECT_FIELDS, projectResolver, filter)
 
-	// Transform all attributes to snake case
+	// Transform all field names (not values) to snake case
 	AVAILABLE_FILTER_FIELDS.forEach(f => {
-		filter = filter.replaceAll(f, snakeCase(f))
+		const fieldPattern = new RegExp('\\b' + f + '\\b(?=\\s*' + FILTER_OPERATORS_REGEX + ')', 'gi')
+		filter = filter.replace(fieldPattern, snakeCase(f))
 	})
 
 	return filter
@@ -176,23 +212,59 @@ export function transformFilterStringFromApi(
 			const pattern = getFilterFieldRegexPattern(field)
 
 			let match: RegExpExecArray | null
-			while ((match = pattern.exec(filter)) !== null) {
-				// eslint-disable-next-line @typescript-eslint/no-unused-vars
-				const [matched, prefix, operator, space, keyword] = match
-				if (keyword) {
-					let keywords = [keyword.trim()]
-					if (operator === 'in' || operator === '?=' || operator === 'not in' || operator === '?!=') {
-						keywords = keyword.trim().split(',').map(k => k.trim())
-					}
+			const replacements: { start: number, length: number, replacement: string }[] = []
 
-					keywords.forEach(k => {
-						const title = resolver(parseInt(k))
-						if (title) {
-							filter = filter.replace(k, title)
-						}
+			while ((match = pattern.exec(filter)) !== null) {
+				const [matched, fieldName, operator, _quotes, quotedContent, unquotedContent] = match
+				const keyword = quotedContent || unquotedContent
+				if (!keyword) {
+					continue
+				}
+
+				let keywords = [keyword.trim()]
+				if (isMultiValueOperator(operator)) {
+					keywords = keyword.trim().split(',').map(k => {
+						let trimmed = k.trim()
+						// Strip quotes from individual values in multi-value scenarios
+						trimmed = trimQuotes(trimmed)
+						return trimmed
 					})
 				}
+
+				const transformedKeywords: string[] = []
+				keywords.forEach(k => {
+					const title = resolver(parseInt(k))
+					if (title) {
+						transformedKeywords.push(title)
+					} else {
+						// Keep original value if resolver returns null
+						transformedKeywords.push(k)
+					}
+				})
+
+				// Reconstruct the entire match with the replaced values
+				const replaced = isMultiValueOperator(operator)
+					? transformedKeywords.join(', ')
+					: transformedKeywords[0] || keyword
+
+				const reconstructedMatch = `${fieldName} ${operator} ${replaced}`
+
+				replacements.push({
+					start: match.index!,
+					length: matched.length,
+					replacement: reconstructedMatch,
+				})
 			}
+
+			// Apply replacements using position-based replacement to avoid
+			// incorrectly replacing values that appear elsewhere in the string
+			let offset = 0
+			replacements.forEach(({start, length, replacement}) => {
+				filter = filter.substring(0, start + offset) +
+					replacement +
+					filter.substring(start + offset + length)
+				offset += replacement.length - length
+			})
 		})
 	}
 
@@ -203,4 +275,8 @@ export function transformFilterStringFromApi(
 	transformFieldsToTitles(PROJECT_FIELDS, projectResolver)
 
 	return filter
+}
+
+export function isMultiValueOperator(operator: string): boolean {
+	return ['in', '?=', 'not in', '?!='].includes(operator)
 }

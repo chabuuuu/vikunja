@@ -16,9 +16,9 @@
 		<div class="comments">
 			<span
 				v-if="taskCommentService.loading && saving === null && !creating"
-				class="is-flex is-align-items-center my-4 ml-2"
+				class="is-flex is-align-items-center mbs-4 mbe-4 mis-2"
 			>
-				<span class="loader is-inline-block mr-2" />
+				<span class="loader is-inline-block mie-2" />
 				{{ $t('task.comment.loading') }}
 			</span>
 			<div
@@ -35,7 +35,7 @@
 						height="48"
 						width="48"
 					>
-					<figcaption class="tw-sr-only">
+					<figcaption class="is-sr-only">
 						{{ $t('misc.avatarOfUser', {user: getDisplayName(c.author)}) }}
 					</figcaption>
 				</figure>
@@ -53,13 +53,13 @@
 							v-tooltip="formatDateLong(c.created)"
 							class="has-text-grey"
 						>
-							{{ formatDateSince(c.created) }}
+							{{ formatDisplayDate(c.created) }}
 						</span>
 						<span
 							v-if="+new Date(c.created) !== +new Date(c.updated)"
 							v-tooltip="formatDateLong(c.updated)"
 						>
-							· {{ $t('task.comment.edited', {date: formatDateSince(c.updated)}) }}
+							· {{ $t('task.comment.edited', {date: formatDisplayDate(c.updated)}) }}
 						</span>
 						<a
 							v-tooltip="$t('task.comment.permalink')"
@@ -68,7 +68,7 @@
 							:title="$t('task.comment.permalink')"
 							@click.prevent.stop="copy(getCommentUrl(`${c.id}`))"
 						>
-							<span class="tw-sr-only">{{ $t('task.comment.permalink') }}</span>
+							<span class="is-sr-only">{{ $t('task.comment.permalink') }}</span>
 							<Icon icon="link" />
 						</a>
 						<CustomTransition name="fade">
@@ -79,7 +79,7 @@
 								"
 								class="is-inline-flex"
 							>
-								<span class="loader is-inline-block mr-2" />
+								<span class="loader is-inline-block mie-2" />
 								{{ $t('misc.saving') }}
 							</span>
 							<span
@@ -101,6 +101,8 @@
 						:bottom-actions="actions[c.id]"
 						:show-save="true"
 						:enable-discard-shortcut="true"
+						:enable-mentions="true"
+						:mention-project-id="projectId"
 						initial-mode="preview"
 						@update:modelValue="
 							() => {
@@ -115,7 +117,7 @@
 					/>
 					<Reactions 
 						v-model="c.reactions"
-						class="mt-2" 
+						class="mbs-2" 
 						entity-kind="comments"
 						:entity-id="c.id"
 						:disabled="!canWrite"
@@ -142,7 +144,7 @@
 						height="48"
 						width="48"
 					>
-					<figcaption class="tw-sr-only">
+					<figcaption class="is-sr-only">
 						{{ $t('misc.avatarOfUser', {user: getDisplayName(authStore.info)}) }}
 					</figcaption>
 				</figure>
@@ -153,7 +155,7 @@
 								v-if="taskCommentService.loading && creating"
 								class="is-inline-flex"
 							>
-								<span class="loader is-inline-block mr-2" />
+								<span class="loader is-inline-block mie-2" />
 								{{ $t('task.comment.creating') }}
 							</span>
 						</CustomTransition>
@@ -168,6 +170,9 @@
 								}"
 								:upload-callback="attachmentUpload"
 								:placeholder="$t('task.comment.placeholder')"
+								:enable-mentions="true"
+								:mention-project-id="projectId"
+								:storage-key="commentStorageKey"
 								@save="addComment()"
 							/>
 						</div>
@@ -206,7 +211,7 @@
 </template>
 
 <script setup lang="ts">
-import {ref, reactive, computed, shallowReactive, watch, nextTick} from 'vue'
+import {ref, reactive, computed, shallowReactive, watch} from 'vue'
 import {useI18n} from 'vue-i18n'
 
 import CustomTransition from '@/components/misc/CustomTransition.vue'
@@ -221,7 +226,8 @@ import type {ITask} from '@/modelTypes/ITask'
 
 import {uploadFile} from '@/helpers/attachments'
 import {success} from '@/message'
-import {formatDateLong, formatDateSince} from '@/helpers/time/formatDate'
+import {formatDateLong, formatDisplayDate} from '@/helpers/time/formatDate'
+import {clearEditorDraft} from '@/helpers/editorDraftStorage'
 import {fetchAvatarBlobUrl, getDisplayName} from '@/models/user'
 import type {IUser} from '@/modelTypes/IUser'
 import {useConfigStore} from '@/stores/config'
@@ -231,6 +237,7 @@ import {useCopyToClipboard} from '@/composables/useCopyToClipboard'
 
 const props = withDefaults(defineProps<{
 	taskId: number,
+	projectId: number,
 	canWrite?: boolean
 	initialComments: ITaskComment[]
 }>(), {
@@ -294,10 +301,12 @@ const actions = computed(() => {
 })
 
 const frontendUrl = computed(() => configStore.frontendUrl)
+const commentStorageKey = computed(() => `task-comment-${props.taskId}`)
 
 const currentPage = ref(1)
 
 const commentsRef = ref<HTMLElement | null>(null)
+
 
 async function attachmentUpload(files: File[] | FileList): (Promise<string[]>) {
 
@@ -321,12 +330,19 @@ async function loadComments(taskId: ITask['id']) {
 		return
 	}
 
+	if (currentPage.value === 1) {
+		taskCommentService.totalPages = 0
+		taskCommentService.resultCount = 0
+	}
+
 	commentEdit.taskId = taskId
 	commentToDelete.taskId = taskId
-	
-	if(typeof props.initialComments !== 'undefined' && currentPage.value === 1) {
-		comments.value = props.initialComments
-		return
+
+	if (typeof props.initialComments !== 'undefined' && currentPage.value === 1) {
+		if (props.initialComments.length < configStore.maxItemsPerPage) {
+			comments.value = props.initialComments
+			return
+		}
 	}
 
 	comments.value = await taskCommentService.getAll({taskId}, {}, currentPage.value)
@@ -339,7 +355,7 @@ async function changePage(page: number) {
 }
 
 watch(
-	() => props.taskId,
+	() => [props.taskId, props.initialComments],
 	() => {
 		currentPage.value = 1 // Reset to first page when task changes
 		loadComments(props.taskId)
@@ -355,13 +371,6 @@ async function addComment() {
 		return
 	}
 
-	// This makes the editor trigger its mounted function again which makes it forget every input
-	// it currently has in its textarea. This is a counter-hack to a hack inside of vue-easymde
-	// which made it impossible to detect change from the outside. Therefore the component would
-	// not update if new content from the outside was made available.
-	// See https://github.com/NikulinIlya/vue-easymde/issues/3
-	editorActive.value = false
-	nextTick(() => (editorActive.value = true))
 	creating.value = true
 
 	try {
@@ -371,6 +380,10 @@ async function addComment() {
 		const comment = await taskCommentService.create(newComment)
 		comments.value.push(comment)
 		newCommentText.value = ''
+
+		// Ensure draft is cleared from localStorage
+		clearEditorDraft(commentStorageKey.value)
+
 		success({message: t('task.comment.addedSuccess')})
 	} finally {
 		creating.value = false
@@ -458,10 +471,10 @@ function getCommentUrl(commentId: string) {
 	img {
 		@media screen and (max-width: $tablet) {
 			display: block;
-			width: 20px;
-			height: 20px;
-			padding-right: 0;
-			margin-right: .5rem;
+			inline-size: 20px;
+			block-size: 20px;
+			padding-inline-end: 0;
+			margin-inline-end: .5rem;
 		}
 
 		@media screen and (min-width: $tablet) {
@@ -494,10 +507,10 @@ function getCommentUrl(commentId: string) {
 }
 
 .media-content {
-	width: calc(100% - 48px - 2rem);
+	inline-size: calc(100% - 48px - 2rem);
 }
 
 .comments-container {
-	scroll-margin-top: 4rem;
+	scroll-margin-block-start: 4rem;
 }
 </style>

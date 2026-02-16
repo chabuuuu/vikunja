@@ -36,7 +36,7 @@
                 {
                     "key": "publicurl",
                     "default_value": "",
-                    "comment": "The public facing URL where your users can reach Vikunja. Used in emails and for the communication between api and frontend."
+                    "comment": "The public facing URL where your users can reach Vikunja. Used in emails and for the communication between api and frontend. The url must be a valid http or https url. This setting is required when cors.enable is true."
                 },
                 {
                     "key": "rootpath",
@@ -124,6 +124,11 @@
                     "comment": "Allow using a custom logo via external URL."
                 },
                 {
+                    "key": "customlogourldark",
+                    "default_value": "",
+                    "comment": "Allow using a custom logo for dark mode via external URL. If not set, the regular logo will be used for both light and dark modes."
+                },
+                {
                     "key": "enablepublicteams",
                     "default_value": "false",
                     "comment": "Enables the public team feature. If enabled, it is possible to configure teams to be public, which makes them\ndiscoverable when sharing a project, therefore not only showing teams the user is member of."
@@ -196,7 +201,7 @@
                 {
                     "key": "path",
                     "default_value": "./vikunja.db",
-                    "comment": "When using sqlite, this is the path where to store the data"
+                    "comment": "When using sqlite, this is the path where to store the database file. Can be an absolute path or relative path. \u003cbr/\u003e\nRelative paths are resolved as follows: \u003cbr/\u003e\n- If `service.rootpath` is explicitly configured (differs from the binary location), the database path is resolved relative to that directory. \u003cbr/\u003e\n- Otherwise, relative paths are resolved to a platform-specific user data directory to prevent database files from being created in system directories (like `C:\\Windows\\System32` on Windows when running as a service): \u003cbr/\u003e\n  - **Windows**: `%LOCALAPPDATA%\\Vikunja` (e.g., `C:\\Users\\username\\AppData\\Local\\Vikunja`) \u003cbr/\u003e\n  - **macOS**: `~/Library/Application Support/Vikunja` \u003cbr/\u003e\n  - **Linux**: `$XDG_DATA_HOME/vikunja` or `~/.local/share/vikunja` \u003cbr/\u003e\n**Recommendation**: Use an absolute path for production deployments, especially when running Vikunja as a Windows service, to have full control over the database location."
                 },
                 {
                     "key": "maxopenconnections",
@@ -396,6 +401,11 @@
                     "comment": "Change the log level. Possible values (case-insensitive) are CRITICAL, ERROR, WARNING, NOTICE, INFO, DEBUG."
                 },
                 {
+                    "key": "format",
+                    "default_value": "text",
+                    "comment": "Logging format. Can be either `text` or `structured` to output JSON."
+                },
+                {
                     "key": "database",
                     "default_value": "off",
                     "comment": "Whether or not to log database queries. Useful for debugging. Possible values are stdout, stderr, file or off to disable database logging."
@@ -409,11 +419,6 @@
                     "key": "http",
                     "default_value": "stdout",
                     "comment": "Whether to log http requests or not. Possible values are stdout, stderr, file or off to disable http logging."
-                },
-                {
-                    "key": "echo",
-                    "default_value": "off",
-                    "comment": "Echo has its own logging which usually is unnecessary, which is why it is disabled by default. Possible values are stdout, stderr, file or off to disable standard logging."
                 },
                 {
                     "key": "events",
@@ -484,6 +489,52 @@
                     "key": "maxsize",
                     "default_value": "20MB",
                     "comment": "The maximum size of a file, as a human-readable string.\nWarning: The max size is limited 2^64-1 bytes due to the underlying datatype"
+                },
+                {
+                    "key": "type",
+                    "default_value": "local",
+                    "comment": "The type of file storage backend. Supported values are `local` and `s3`."
+                },
+                {
+                    "key": "s3",
+                    "comment": "Configuration for S3 storage backend",
+                    "children": [
+                        {
+                            "key": "endpoint",
+                            "default_value": "",
+                            "comment": "The S3 endpoint to use. Can be used with S3-compatible services like MinIO or Backblaze B2."
+                        },
+                        {
+                            "key": "bucket",
+                            "default_value": "",
+                            "comment": "The name of the S3 bucket to store files in."
+                        },
+                        {
+                            "key": "region",
+                            "default_value": "",
+                            "comment": "The S3 region where the bucket is located."
+                        },
+                        {
+                            "key": "accesskey",
+                            "default_value": "",
+                            "comment": "The S3 access key ID."
+                        },
+                        {
+                            "key": "secretkey",
+                            "default_value": "",
+                            "comment": "The S3 secret access key."
+                        },
+                        {
+                            "key": "usepathstyle",
+                            "default_value": "false",
+                            "comment": "Whether to use path-style addressing (e.g., https://s3.amazonaws.com/bucket/key) instead of virtual-hosted-style (e.g., https://bucket.s3.amazonaws.com/key). This is commonly needed for self-hosted S3-compatible services. Some providers only support one style or the other."
+                        },
+                        {
+                            "key": "disablesigning",
+                            "default_value": "false",
+                            "comment": "When enabled, the S3 client will send UNSIGNED-PAYLOAD instead of computing a SHA256 hash for request signing. Some S3-compatible providers (such as Ceph RadosGW, Clever Cloud Cellar) do not correctly verify payload signatures and return XAmzContentSHA256Mismatch errors. Enabling this option works around the issue. Only applies over HTTPS."
+                        }
+                    ]
                 }
             ]
         },
@@ -570,6 +621,11 @@
                     "key": "gravatarexpiration",
                     "default_value": "3600",
                     "comment": "When using gravatar, this is the duration in seconds until a cached gravatar user avatar expires"
+                },
+                {
+                    "key": "gravatarbaseurl",
+                    "default_value": "https://www.gravatar.com",
+                    "comment": "If you use a Gravatar-compatible service other than gravatar.com, you may configure the base URL for the service here.\nFor instance, gravatarbaseurl: 'https://libravatar.org'. The default is https://www.gravatar.com."
                 }
             ]
         },
@@ -717,6 +773,11 @@
                                             "key": "forceuserinfo",
                                             "default_value": "false",
                                             "comment": "This option forces the use of the OpenID Connect UserInfo endpoint to retrieve user information instead of relying on claims from the ID token. When set to `true`, user data (email, name, username) will always be obtained from the UserInfo endpoint even if the information is available in the token claims. This is useful for providers that don't include complete user information in their tokens or when you need the most up-to-date user data. Allowed value is either `true` or `false`."
+                                        },
+                                        {
+                                            "key": "requireavailability",
+                                            "default_value": "false",
+                                            "comment": "This option requires the OpenID Connect provider to be available during Vikunja startup. When set to `true`, Vikunja will crash if it cannot connect to the provider during initialization, allowing container orchestrators like Kubernetes to handle the failure by restarting the application. This is useful in environments where you want to ensure all authentication providers are available before the application starts serving requests. Allowed value is either `true` or `false`."
                                         }
                                     ]
                                 }
@@ -943,6 +1004,21 @@
                     "key": "renewbefore",
                     "default_value": "30d",
                     "comment": "A duration when certificates should be renewed before they expire. Valid time units are `ns`, `us` (or `µs`), `ms`, `s`, `m`, `h`."
+                }
+            ]
+        },
+        {
+            "key": "plugins",
+            "children": [
+                {
+                    "key": "enabled",
+                    "default_value": "false",
+                    "comment": "Whether to enable the plugin system."
+                },
+                {
+                    "key": "dir",
+                    "default_value": "<rootpath>plugins",
+                    "comment": "The directory where plugins are stored."
                 }
             ]
         }

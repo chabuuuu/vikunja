@@ -23,7 +23,6 @@ import (
 	"code.vikunja.io/api/pkg/models"
 	"code.vikunja.io/api/pkg/web/handler"
 
-	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -41,7 +40,7 @@ func TestTaskComments(t *testing.T) {
 			ID:          2,
 			Hash:        "test2",
 			ProjectID:   2,
-			Right:       models.RightWrite,
+			Permission:  models.PermissionWrite,
 			SharingType: models.SharingTypeWithoutPassword,
 			SharedByID:  1,
 		},
@@ -63,75 +62,75 @@ func TestTaskComments(t *testing.T) {
 			require.Error(t, err)
 			assertHandlerErrorCode(t, err, models.ErrCodeTaskDoesNotExist)
 		})
-		t.Run("Rights check", func(t *testing.T) {
+		t.Run("Permissions check", func(t *testing.T) {
 			// Only the own comments can be updated
 			t.Run("Forbidden", func(t *testing.T) {
 				_, err := testHandler.testUpdateWithUser(nil, map[string]string{"task": "14", "commentid": "2"}, `{"comment":"Lorem Ipsum"}`)
 				require.Error(t, err)
-				assert.Contains(t, err.(*echo.HTTPError).Message, `Forbidden`)
+				assert.Contains(t, getHTTPErrorMessage(err), `Forbidden`)
 			})
 			t.Run("Shared Via Team readonly", func(t *testing.T) {
 				_, err := testHandler.testUpdateWithUser(nil, map[string]string{"task": "15", "commentid": "3"}, `{"comment":"Lorem Ipsum"}`)
 				require.Error(t, err)
-				assert.Contains(t, err.(*echo.HTTPError).Message, `Forbidden`)
+				assert.Contains(t, getHTTPErrorMessage(err), `Forbidden`)
 			})
 			t.Run("Shared Via Team write", func(t *testing.T) {
 				_, err := testHandler.testUpdateWithUser(nil, map[string]string{"task": "16", "commentid": "4"}, `{"comment":"Lorem Ipsum"}`)
 				require.Error(t, err)
-				assert.Contains(t, err.(*echo.HTTPError).Message, `Forbidden`)
+				assert.Contains(t, getHTTPErrorMessage(err), `Forbidden`)
 			})
 			t.Run("Shared Via Team admin", func(t *testing.T) {
 				_, err := testHandler.testUpdateWithUser(nil, map[string]string{"task": "17", "commentid": "5"}, `{"comment":"Lorem Ipsum"}`)
 				require.Error(t, err)
-				assert.Contains(t, err.(*echo.HTTPError).Message, `Forbidden`)
+				assert.Contains(t, getHTTPErrorMessage(err), `Forbidden`)
 			})
 
 			t.Run("Shared Via User readonly", func(t *testing.T) {
 				_, err := testHandler.testUpdateWithUser(nil, map[string]string{"task": "18", "commentid": "6"}, `{"comment":"Lorem Ipsum"}`)
 				require.Error(t, err)
-				assert.Contains(t, err.(*echo.HTTPError).Message, `Forbidden`)
+				assert.Contains(t, getHTTPErrorMessage(err), `Forbidden`)
 			})
 			t.Run("Shared Via User write", func(t *testing.T) {
 				_, err := testHandler.testUpdateWithUser(nil, map[string]string{"task": "19", "commentid": "7"}, `{"comment":"Lorem Ipsum"}`)
 				require.Error(t, err)
-				assert.Contains(t, err.(*echo.HTTPError).Message, `Forbidden`)
+				assert.Contains(t, getHTTPErrorMessage(err), `Forbidden`)
 			})
 			t.Run("Shared Via User admin", func(t *testing.T) {
 				_, err := testHandler.testUpdateWithUser(nil, map[string]string{"task": "20", "commentid": "8"}, `{"comment":"Lorem Ipsum"}`)
 				require.Error(t, err)
-				assert.Contains(t, err.(*echo.HTTPError).Message, `Forbidden`)
+				assert.Contains(t, getHTTPErrorMessage(err), `Forbidden`)
 			})
 
 			t.Run("Shared Via Parent Project Team readonly", func(t *testing.T) {
 				_, err := testHandler.testUpdateWithUser(nil, map[string]string{"task": "21", "commentid": "9"}, `{"comment":"Lorem Ipsum"}`)
 				require.Error(t, err)
-				assert.Contains(t, err.(*echo.HTTPError).Message, `Forbidden`)
+				assert.Contains(t, getHTTPErrorMessage(err), `Forbidden`)
 			})
 			t.Run("Shared Via Parent Project Team write", func(t *testing.T) {
 				_, err := testHandler.testUpdateWithUser(nil, map[string]string{"task": "22", "commentid": "10"}, `{"comment":"Lorem Ipsum"}`)
 				require.Error(t, err)
-				assert.Contains(t, err.(*echo.HTTPError).Message, `Forbidden`)
+				assert.Contains(t, getHTTPErrorMessage(err), `Forbidden`)
 			})
 			t.Run("Shared Via Parent Project Team admin", func(t *testing.T) {
 				_, err := testHandler.testUpdateWithUser(nil, map[string]string{"task": "23", "commentid": "11"}, `{"comment":"Lorem Ipsum"}`)
 				require.Error(t, err)
-				assert.Contains(t, err.(*echo.HTTPError).Message, `Forbidden`)
+				assert.Contains(t, getHTTPErrorMessage(err), `Forbidden`)
 			})
 
 			t.Run("Shared Via Parent Project User readonly", func(t *testing.T) {
 				_, err := testHandler.testUpdateWithUser(nil, map[string]string{"task": "24", "commentid": "12"}, `{"comment":"Lorem Ipsum"}`)
 				require.Error(t, err)
-				assert.Contains(t, err.(*echo.HTTPError).Message, `Forbidden`)
+				assert.Contains(t, getHTTPErrorMessage(err), `Forbidden`)
 			})
 			t.Run("Shared Via Parent Project User write", func(t *testing.T) {
 				_, err := testHandler.testUpdateWithUser(nil, map[string]string{"task": "25", "commentid": "13"}, `{"comment":"Lorem Ipsum"}`)
 				require.Error(t, err)
-				assert.Contains(t, err.(*echo.HTTPError).Message, `Forbidden`)
+				assert.Contains(t, getHTTPErrorMessage(err), `Forbidden`)
 			})
 			t.Run("Shared Via Parent Project User admin", func(t *testing.T) {
 				_, err := testHandler.testUpdateWithUser(nil, map[string]string{"task": "26", "commentid": "14"}, `{"comment":"Lorem Ipsum"}`)
 				require.Error(t, err)
-				assert.Contains(t, err.(*echo.HTTPError).Message, `Forbidden`)
+				assert.Contains(t, getHTTPErrorMessage(err), `Forbidden`)
 			})
 		})
 	})
@@ -146,75 +145,75 @@ func TestTaskComments(t *testing.T) {
 			require.Error(t, err)
 			assertHandlerErrorCode(t, err, models.ErrCodeTaskDoesNotExist)
 		})
-		t.Run("Rights check", func(t *testing.T) {
+		t.Run("Permissions check", func(t *testing.T) {
 			// Only the own comments can be deleted
 			t.Run("Forbidden", func(t *testing.T) {
 				_, err := testHandler.testDeleteWithUser(nil, map[string]string{"task": "14", "commentid": "2"})
 				require.Error(t, err)
-				assert.Contains(t, err.(*echo.HTTPError).Message, `Forbidden`)
+				assert.Contains(t, getHTTPErrorMessage(err), `Forbidden`)
 			})
 			t.Run("Shared Via Team readonly", func(t *testing.T) {
 				_, err := testHandler.testDeleteWithUser(nil, map[string]string{"task": "15", "commentid": "3"})
 				require.Error(t, err)
-				assert.Contains(t, err.(*echo.HTTPError).Message, `Forbidden`)
+				assert.Contains(t, getHTTPErrorMessage(err), `Forbidden`)
 			})
 			t.Run("Shared Via Team write", func(t *testing.T) {
 				_, err := testHandler.testDeleteWithUser(nil, map[string]string{"task": "16", "commentid": "4"})
 				require.Error(t, err)
-				assert.Contains(t, err.(*echo.HTTPError).Message, `Forbidden`)
+				assert.Contains(t, getHTTPErrorMessage(err), `Forbidden`)
 			})
 			t.Run("Shared Via Team admin", func(t *testing.T) {
 				_, err := testHandler.testDeleteWithUser(nil, map[string]string{"task": "17", "commentid": "5"})
 				require.Error(t, err)
-				assert.Contains(t, err.(*echo.HTTPError).Message, `Forbidden`)
+				assert.Contains(t, getHTTPErrorMessage(err), `Forbidden`)
 			})
 
 			t.Run("Shared Via User readonly", func(t *testing.T) {
 				_, err := testHandler.testDeleteWithUser(nil, map[string]string{"task": "18", "commentid": "6"})
 				require.Error(t, err)
-				assert.Contains(t, err.(*echo.HTTPError).Message, `Forbidden`)
+				assert.Contains(t, getHTTPErrorMessage(err), `Forbidden`)
 			})
 			t.Run("Shared Via User write", func(t *testing.T) {
 				_, err := testHandler.testDeleteWithUser(nil, map[string]string{"task": "19", "commentid": "7"})
 				require.Error(t, err)
-				assert.Contains(t, err.(*echo.HTTPError).Message, `Forbidden`)
+				assert.Contains(t, getHTTPErrorMessage(err), `Forbidden`)
 			})
 			t.Run("Shared Via User admin", func(t *testing.T) {
 				_, err := testHandler.testDeleteWithUser(nil, map[string]string{"task": "20", "commentid": "8"})
 				require.Error(t, err)
-				assert.Contains(t, err.(*echo.HTTPError).Message, `Forbidden`)
+				assert.Contains(t, getHTTPErrorMessage(err), `Forbidden`)
 			})
 
 			t.Run("Shared Via Parent Project Team readonly", func(t *testing.T) {
 				_, err := testHandler.testDeleteWithUser(nil, map[string]string{"task": "21", "commentid": "9"})
 				require.Error(t, err)
-				assert.Contains(t, err.(*echo.HTTPError).Message, `Forbidden`)
+				assert.Contains(t, getHTTPErrorMessage(err), `Forbidden`)
 			})
 			t.Run("Shared Via Parent Project Team write", func(t *testing.T) {
 				_, err := testHandler.testDeleteWithUser(nil, map[string]string{"task": "22", "commentid": "10"})
 				require.Error(t, err)
-				assert.Contains(t, err.(*echo.HTTPError).Message, `Forbidden`)
+				assert.Contains(t, getHTTPErrorMessage(err), `Forbidden`)
 			})
 			t.Run("Shared Via Parent Project Team admin", func(t *testing.T) {
 				_, err := testHandler.testDeleteWithUser(nil, map[string]string{"task": "23", "commentid": "11"})
 				require.Error(t, err)
-				assert.Contains(t, err.(*echo.HTTPError).Message, `Forbidden`)
+				assert.Contains(t, getHTTPErrorMessage(err), `Forbidden`)
 			})
 
 			t.Run("Shared Via Parent Project User readonly", func(t *testing.T) {
 				_, err := testHandler.testDeleteWithUser(nil, map[string]string{"task": "24", "commentid": "12"})
 				require.Error(t, err)
-				assert.Contains(t, err.(*echo.HTTPError).Message, `Forbidden`)
+				assert.Contains(t, getHTTPErrorMessage(err), `Forbidden`)
 			})
 			t.Run("Shared Via Parent Project User write", func(t *testing.T) {
 				_, err := testHandler.testDeleteWithUser(nil, map[string]string{"task": "25", "commentid": "13"})
 				require.Error(t, err)
-				assert.Contains(t, err.(*echo.HTTPError).Message, `Forbidden`)
+				assert.Contains(t, getHTTPErrorMessage(err), `Forbidden`)
 			})
 			t.Run("Shared Via Parent Project User admin", func(t *testing.T) {
 				_, err := testHandler.testDeleteWithUser(nil, map[string]string{"task": "26", "commentid": "14"})
 				require.Error(t, err)
-				assert.Contains(t, err.(*echo.HTTPError).Message, `Forbidden`)
+				assert.Contains(t, getHTTPErrorMessage(err), `Forbidden`)
 			})
 		})
 	})
@@ -229,17 +228,17 @@ func TestTaskComments(t *testing.T) {
 			require.Error(t, err)
 			assertHandlerErrorCode(t, err, models.ErrCodeTaskDoesNotExist)
 		})
-		t.Run("Rights check", func(t *testing.T) {
+		t.Run("Permissions check", func(t *testing.T) {
 			t.Run("Forbidden", func(t *testing.T) {
 				// Owned by user13
 				_, err := testHandler.testCreateWithUser(nil, map[string]string{"task": "34"}, `{"comment":"Lorem Ipsum"}`)
 				require.Error(t, err)
-				assert.Contains(t, err.(*echo.HTTPError).Message, `Forbidden`)
+				assert.Contains(t, getHTTPErrorMessage(err), `Forbidden`)
 			})
 			t.Run("Shared Via Team readonly", func(t *testing.T) {
 				_, err := testHandler.testCreateWithUser(nil, map[string]string{"task": "15"}, `{"comment":"Lorem Ipsum"}`)
 				require.Error(t, err)
-				assert.Contains(t, err.(*echo.HTTPError).Message, `Forbidden`)
+				assert.Contains(t, getHTTPErrorMessage(err), `Forbidden`)
 			})
 			t.Run("Shared Via Team write", func(t *testing.T) {
 				rec, err := testHandler.testCreateWithUser(nil, map[string]string{"task": "16"}, `{"comment":"Lorem Ipsum"}`)
@@ -255,7 +254,7 @@ func TestTaskComments(t *testing.T) {
 			t.Run("Shared Via User readonly", func(t *testing.T) {
 				_, err := testHandler.testCreateWithUser(nil, map[string]string{"task": "18"}, `{"comment":"Lorem Ipsum"}`)
 				require.Error(t, err)
-				assert.Contains(t, err.(*echo.HTTPError).Message, `Forbidden`)
+				assert.Contains(t, getHTTPErrorMessage(err), `Forbidden`)
 			})
 			t.Run("Shared Via User write", func(t *testing.T) {
 				rec, err := testHandler.testCreateWithUser(nil, map[string]string{"task": "19"}, `{"comment":"Lorem Ipsum"}`)
@@ -271,7 +270,7 @@ func TestTaskComments(t *testing.T) {
 			t.Run("Shared Via Parent Project Team readonly", func(t *testing.T) {
 				_, err := testHandler.testCreateWithUser(nil, map[string]string{"task": "21"}, `{"comment":"Lorem Ipsum"}`)
 				require.Error(t, err)
-				assert.Contains(t, err.(*echo.HTTPError).Message, `Forbidden`)
+				assert.Contains(t, getHTTPErrorMessage(err), `Forbidden`)
 			})
 			t.Run("Shared Via Parent Project Team write", func(t *testing.T) {
 				rec, err := testHandler.testCreateWithUser(nil, map[string]string{"task": "22"}, `{"comment":"Lorem Ipsum"}`)
@@ -287,7 +286,7 @@ func TestTaskComments(t *testing.T) {
 			t.Run("Shared Via Parent Project User readonly", func(t *testing.T) {
 				_, err := testHandler.testCreateWithUser(nil, map[string]string{"task": "24"}, `{"comment":"Lorem Ipsum"}`)
 				require.Error(t, err)
-				assert.Contains(t, err.(*echo.HTTPError).Message, `Forbidden`)
+				assert.Contains(t, getHTTPErrorMessage(err), `Forbidden`)
 			})
 			t.Run("Shared Via Parent Project User write", func(t *testing.T) {
 				rec, err := testHandler.testCreateWithUser(nil, map[string]string{"task": "25"}, `{"comment":"Lorem Ipsum"}`)

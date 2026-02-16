@@ -17,6 +17,7 @@
 package models
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -110,6 +111,26 @@ func (err ValidationHTTPError) Error() string {
 	return theErr.Error()
 }
 
+// MarshalJSON implements json.Marshaler to ensure InvalidFields is included in the JSON response.
+// This is needed because Echo's DefaultHTTPErrorHandler converts error types to {"message": err.Error()},
+// losing structured data. By implementing json.Marshaler, Echo will serialize the full struct.
+func (err ValidationHTTPError) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Code          int      `json:"code"`
+		Message       string   `json:"message"`
+		InvalidFields []string `json:"invalid_fields"`
+	}{
+		Code:          err.Code,
+		Message:       err.Message,
+		InvalidFields: err.InvalidFields,
+	})
+}
+
+// GetHTTPCode returns the HTTP status code for this error.
+func (err ValidationHTTPError) GetHTTPCode() int {
+	return err.HTTPCode
+}
+
 func InvalidFieldError(fields []string) error {
 	return InvalidFieldErrorWithMessage(fields, "Invalid Data")
 }
@@ -150,6 +171,42 @@ func (err ErrInvalidTimezone) HTTPError() web.HTTPError {
 		HTTPCode: http.StatusBadRequest,
 		Code:     ErrCodeInvalidTimezone,
 		Message:  fmt.Sprintf("The timezone '%s' is invalid", err.Name),
+	}
+}
+
+// ErrInvalidModel represents an error where the request body could not be parsed
+type ErrInvalidModel struct {
+	Message string
+	Err     error // Original error for unwrapping
+}
+
+// IsErrInvalidModel checks if an error is ErrInvalidModel.
+func IsErrInvalidModel(err error) bool {
+	_, ok := err.(ErrInvalidModel)
+	return ok
+}
+
+func (err ErrInvalidModel) Error() string {
+	if err.Message != "" {
+		return fmt.Sprintf("Invalid model provided: %s", err.Message)
+	}
+	return "Invalid model provided."
+}
+
+// Unwrap returns the wrapped error for use with errors.Is/errors.As
+func (err ErrInvalidModel) Unwrap() error {
+	return err.Err
+}
+
+// ErrCodeInvalidModel holds the unique world-error code of this error
+const ErrCodeInvalidModel = 2004
+
+// HTTPError holds the http error description
+func (err ErrInvalidModel) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeInvalidModel,
+		Message:  err.Error(),
 	}
 }
 
@@ -564,31 +621,31 @@ func (err ErrBulkTasksNeedAtLeastOne) HTTPError() web.HTTPError {
 	return web.HTTPError{HTTPCode: http.StatusBadRequest, Code: ErrCodeBulkTasksNeedAtLeastOne, Message: "Need at least one tasks to do bulk editing."}
 }
 
-// ErrNoRightToSeeTask represents an error where a user does not have the right to see a task
-type ErrNoRightToSeeTask struct {
+// ErrNoPermissionToSeeTask represents an error where a user does not have the permission to see a task
+type ErrNoPermissionToSeeTask struct {
 	TaskID int64
 	UserID int64
 }
 
-// IsErrNoRightToSeeTask checks if an error is ErrNoRightToSeeTask.
-func IsErrNoRightToSeeTask(err error) bool {
-	_, ok := err.(ErrNoRightToSeeTask)
+// IsErrNoPermissionToSeeTask checks if an error is ErrNoPermissionToSeeTask.
+func IsErrNoPermissionToSeeTask(err error) bool {
+	_, ok := err.(ErrNoPermissionToSeeTask)
 	return ok
 }
 
-func (err ErrNoRightToSeeTask) Error() string {
-	return fmt.Sprintf("User does not have the right to see the task [TaskID: %v, ID: %v]", err.TaskID, err.UserID)
+func (err ErrNoPermissionToSeeTask) Error() string {
+	return fmt.Sprintf("User does not have the permission to see the task [TaskID: %v, ID: %v]", err.TaskID, err.UserID)
 }
 
 // ErrCodeNoRightToSeeTask holds the unique world-error code of this error
 const ErrCodeNoRightToSeeTask = 4005
 
 // HTTPError holds the http error description
-func (err ErrNoRightToSeeTask) HTTPError() web.HTTPError {
+func (err ErrNoPermissionToSeeTask) HTTPError() web.HTTPError {
 	return web.HTTPError{
 		HTTPCode: http.StatusForbidden,
 		Code:     ErrCodeNoRightToSeeTask,
-		Message:  "You don't have the right to see this task.",
+		Message:  "You don't have the permission to see this task.",
 	}
 }
 
@@ -1165,6 +1222,61 @@ func (err ErrMustHaveProjectViewToSortByPosition) HTTPError() web.HTTPError {
 	}
 }
 
+// ErrInvalidTaskColumn represents an error where the provided task column is invalid
+type ErrInvalidTaskColumn struct {
+	Column string
+}
+
+// IsErrInvalidTaskColumn checks if an error is ErrInvalidTaskColumn.
+func IsErrInvalidTaskColumn(err error) bool {
+	_, ok := err.(ErrInvalidTaskColumn)
+	return ok
+}
+
+func (err ErrInvalidTaskColumn) Error() string {
+	return fmt.Sprintf("Task column %s is invalid", err.Column)
+}
+
+// ErrCodeInvalidTaskColumn holds the unique world-error code of this error
+const ErrCodeInvalidTaskColumn = 4027
+
+// HTTPError holds the http error description
+func (err ErrInvalidTaskColumn) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeInvalidTaskColumn,
+		Message:  fmt.Sprintf("The task field '%s' is invalid.", err.Column),
+	}
+}
+
+// ErrNeedsFullRecalculation represents an error where localized position repair cannot proceed
+// and the entire view must be recalculated.
+type ErrNeedsFullRecalculation struct {
+	ProjectViewID int64
+}
+
+// IsErrNeedsFullRecalculation checks if an error is ErrNeedsFullRecalculation.
+func IsErrNeedsFullRecalculation(err error) bool {
+	_, ok := err.(*ErrNeedsFullRecalculation)
+	return ok
+}
+
+func (err *ErrNeedsFullRecalculation) Error() string {
+	return fmt.Sprintf("Insufficient spacing for localized repair [ProjectViewID: %d]", err.ProjectViewID)
+}
+
+// ErrCodeNeedsFullRecalculation holds the unique world-error code of this error
+const ErrCodeNeedsFullRecalculation = 4028
+
+// HTTPError holds the http error description
+func (err *ErrNeedsFullRecalculation) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusInternalServerError,
+		Code:     ErrCodeNeedsFullRecalculation,
+		Message:  "Position repair requires full view recalculation.",
+	}
+}
+
 // ============
 // Team errors
 // ============
@@ -1497,7 +1609,7 @@ func (err ErrLabelDoesNotExist) HTTPError() web.HTTPError {
 	}
 }
 
-// ErrUserHasNoAccessToLabel represents an error where a user does not have the right to see a label
+// ErrUserHasNoAccessToLabel represents an error where a user does not have the permission to see a label
 type ErrUserHasNoAccessToLabel struct {
 	LabelID int64
 	UserID  int64
@@ -1526,33 +1638,33 @@ func (err ErrUserHasNoAccessToLabel) HTTPError() web.HTTPError {
 }
 
 // ========
-// Rights
+// Permissions
 // ========
 
-// ErrInvalidRight represents an error where a right is invalid
-type ErrInvalidRight struct {
-	Right Right
+// ErrInvalidPermission represents an error where a permission is invalid
+type ErrInvalidPermission struct {
+	Permission Permission
 }
 
-// IsErrInvalidRight checks if an error is ErrInvalidRight.
-func IsErrInvalidRight(err error) bool {
-	_, ok := err.(ErrInvalidRight)
+// IsErrInvalidPermission checks if an error is ErrInvalidPermission.
+func IsErrInvalidPermission(err error) bool {
+	_, ok := err.(ErrInvalidPermission)
 	return ok
 }
 
-func (err ErrInvalidRight) Error() string {
-	return fmt.Sprintf("Right invalid [Right: %d]", err.Right)
+func (err ErrInvalidPermission) Error() string {
+	return fmt.Sprintf("Permission invalid [Permission: %d]", err.Permission)
 }
 
 // ErrCodeInvalidRight holds the unique world-error code of this error
 const ErrCodeInvalidRight = 9001
 
 // HTTPError holds the http error description
-func (err ErrInvalidRight) HTTPError() web.HTTPError {
+func (err ErrInvalidPermission) HTTPError() web.HTTPError {
 	return web.HTTPError{
 		HTTPCode: http.StatusBadRequest,
 		Code:     ErrCodeInvalidRight,
-		Message:  "The right is invalid.",
+		Message:  "The permission is invalid.",
 	}
 }
 
@@ -1698,6 +1810,34 @@ func (err *ErrOnlyOneDoneBucketPerProject) HTTPError() web.HTTPError {
 		HTTPCode: http.StatusPreconditionFailed,
 		Code:     ErrCodeOnlyOneDoneBucketPerProject,
 		Message:  "There can be only one done bucket per project.",
+	}
+}
+
+// ErrTaskAlreadyExistsInBucket represents an error where a task already exists in a bucket for a project view
+type ErrTaskAlreadyExistsInBucket struct {
+	TaskID        int64
+	ProjectViewID int64
+}
+
+// IsErrTaskAlreadyExistsInBucket checks if an error is ErrTaskAlreadyExistsInBucket.
+func IsErrTaskAlreadyExistsInBucket(err error) bool {
+	_, ok := err.(ErrTaskAlreadyExistsInBucket)
+	return ok
+}
+
+func (err ErrTaskAlreadyExistsInBucket) Error() string {
+	return fmt.Sprintf("Task already exists in a bucket for this project view [TaskID: %d, ProjectViewID: %d]", err.TaskID, err.ProjectViewID)
+}
+
+// ErrCodeTaskAlreadyExistsInBucket holds the unique world-error code of this error
+const ErrCodeTaskAlreadyExistsInBucket = 10006
+
+// HTTPError holds the http error description
+func (err ErrTaskAlreadyExistsInBucket) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeTaskAlreadyExistsInBucket,
+		Message:  "This task already exists in a bucket for this project view.",
 	}
 }
 

@@ -42,20 +42,26 @@
 <script lang="ts" setup>
 import {computed} from 'vue'
 
+interface PaginationPage {
+	number: number
+	isEllipsis: boolean
+}
+
 const props = defineProps<{
 	totalPages: number,
 	currentPage: number
 }>()
 
-function createPagination(totalPages: number, currentPage: number) {
-	const pages = []
+function createPagination(totalPages: number, currentPage: number): PaginationPage[] {
+	const pages: PaginationPage[] = []
 	for (let i = 0; i < totalPages; i++) {
 		if (
 			i > 0 &&
 			(i + 1) < totalPages &&
 			((i + 1) > currentPage + 1 || (i + 1) < currentPage - 1)
 		) {
-			if (pages[i - 1] && !pages[i - 1].isEllipsis) {
+			const prevPage = pages[i - 1]
+			if (prevPage && !prevPage.isEllipsis) {
 				pages.push({
 					number: 0,
 					isEllipsis: true,
@@ -63,7 +69,7 @@ function createPagination(totalPages: number, currentPage: number) {
 			}
 			continue
 		}
-
+		
 		pages.push({
 			number: i + 1,
 			isEllipsis: false,
@@ -77,7 +83,7 @@ const pages = computed(() => createPagination(props.totalPages, props.currentPag
 
 <style lang="scss" scoped>
 .pagination {
-	padding-bottom: 1rem;
+	padding-block-end: 1rem;
 }
 
 .pagination-previous,
@@ -90,7 +96,7 @@ const pages = computed(() => createPagination(props.totalPages, props.currentPag
 
 .pagination-list {
 	&, & li {
-		margin-top: 0;
+		margin-block-start: 0;
 	}
 }
 </style>

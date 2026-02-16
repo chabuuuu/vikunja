@@ -93,6 +93,8 @@
 				"discoverableByEmail": "Erlaube anderen Benutzer:innen, mich als Mitglied zu Teams oder Projekten hinzuzufügen, wenn sie nach meiner vollständigen E-Mail Adresse suchen",
 				"playSoundWhenDone": "Spil es Tönli ab, wenn en Task als fertig markiert wird",
 				"allowIconChanges": "Zu bestimmten Zeiten spezielle Logos anzeigen",
+				"alwaysShowBucketTaskCount": "Immer die Anzahl der Aufgaben pro Kanban-Spalte anzeigen",
+				"defaultTaskRelationType": "Standard-Aufgabenbeziehungstyp",
 				"weekStart": "D'Wuche fangt ah am",
 				"weekStartSunday": "Sunntig",
 				"weekStartMonday": "Määntig",
@@ -103,7 +105,29 @@
 				"overdueTasksRemindersTime": "Zeit der E-Mail-Zusammenfassung der überfälligen Aufgaben",
 				"filterUsedOnOverview": "Gespeicherter Filter, der für die Startseite verwendet wird",
 				"minimumPriority": "Minimal sichtbare Aufgaben-Priorität",
+				"dateDisplay": "Datumsformat",
+				"dateDisplayOptions": {
+					"relative": "Relativ (z.B. vor 3 Tagen)",
+					"mm-dd-yyyy": "MM-TT-JJJJ",
+					"dd-mm-yyyy": "TT-MM-JJJJ",
+					"yyyy-mm-dd": "JJJJ-MM-TT",
+					"mm/dd/yyyy": "MM/TT/JJJJ",
+					"dd/mm/yyyy": "TT/MM/JJJJ",
+					"yyyy/mm/dd": "JJJJ/MM/TT"
+				},
+				"timeFormat": "Zeitformat",
+				"timeFormatOptions": {
+					"12h": "12 Stunden (AM/PM)",
+					"24h": "24 Stunden (HH:mm)"
+				},
 				"externalUserNameChange": "Dein Name wird von deinem Login-Provider verwaltet ({provider}). Um ihn zu ändern, aktualisiere ihn bitte dort."
+			},
+			"sections": {
+				"personalInformation": "Persönliche Angaben",
+				"taskAndNotifications": "Projekte & Aufgaben",
+				"privacy": "Privatsphäre",
+				"localization": "Sprachauswahl",
+				"appearance": "Aussehen & Verhalten"
 			},
 			"totp": {
 				"title": "Zweifaktor Authentifizierig",
@@ -158,6 +182,9 @@
 					"dark": "Dunkel"
 				}
 			},
+			"backgroundBrightness": {
+				"title": "Hintergrundhelligkeit"
+			},
 			"apiTokens": {
 				"title": "API-Tokens",
 				"general": "Mit API-Token kannst du die API von Vikunja ohne Login-Daten verwenden.",
@@ -209,7 +236,9 @@
 			"descriptionPasswordRequired": "Bitte gib dein Passwort ein, um fortzufahren:",
 			"request": "Eine Kopie meiner Vikunja Daten anfordern",
 			"success": "Du hast deine Daten bei Vikunja erfolgreich angefordert! Wir schicken dir eine E-Mail, sobald sie zum Download bereitstehen.",
-			"downloadTitle": "Lade deine exportierten Vikunja-Daten herunter"
+			"downloadTitle": "Lade deine exportierten Vikunja-Daten herunter",
+			"ready": "Dein Export steht zum Download bereit. Du kannst ihn bis {0} herunterladen.",
+			"requestNew": "Einen weiteren Export anfordern"
 		}
 	},
 	"project": {
@@ -290,8 +319,8 @@
 			"links": {
 				"title": "Linkfreigaben",
 				"what": "Was ist eine Linkfreigabe?",
-				"explanation": "Mit Linkfreigaben kannst Projekt du Listen mit Benutzer:innen ohne Vikunja-Account teilen.",
-				"create": "Erstelle ein Linkfreigabe",
+				"explanation": "Mit Linkfreigaben kannst du Projekte mit Benutzer:innen ohne Vikunja-Account teilen.",
+				"create": "Erstelle eine Linkfreigabe",
 				"name": "Name (optional)",
 				"namePlaceholder": "z.B. Lorem Ipsum",
 				"nameExplanation": "Alle Aktionen, die mit dieser Linkfreigabe durchgeführt werden, werden mit diesem Namen angezeigt.",
@@ -317,7 +346,7 @@
 				"addedSuccess": "{type} wurde erfolgreich hinzugefügt.",
 				"updatedSuccess": "{type} wurde erfolgreich hinzugefügt."
 			},
-			"right": {
+			"permission": {
 				"title": "Berechtigung",
 				"read": "Nur Leserechte",
 				"readWrite": "Lesen & Schreiben",
@@ -347,7 +376,21 @@
 			"day": "Tag",
 			"hour": "Stunde",
 			"range": "Zeitraum",
-			"noDates": "Diese Aufgabe hat keine Daten definiert."
+			"chartLabel": "Projekt Gantt-Diagramm",
+			"taskBarsForRow": "Aufgabenleisten für Zeile {rowId}",
+			"taskBarLabel": "Aufgabe: {task}. Von {startDate} bis {endDate}. {dateType}. Klicke zum Bearbeiten, ziehe zum Verschieben.",
+			"scheduledDates": "Geplante Daten",
+			"estimatedDates": "Voraussichtliche Daten",
+			"resizeStartDate": "Startdatum für Aufgabe {task} anpassen",
+			"resizeEndDate": "Enddatum für Aufgabe {task} anpassen",
+			"timelineHeader": "Zeitleiste mit Monaten und Tagen",
+			"monthsRow": "Monatszeile",
+			"daysRow": "Tageszeile",
+			"monthLabel": "Monat: {month}",
+			"dayLabel": "Tag: {date}, {weekday}",
+			"dayLabelToday": "Heute: {date}, {weekday}",
+			"taskAriaLabel": "Aufgabe: {task}",
+			"taskAriaLabelById": "Aufgabe {id}"
 		},
 		"table": {
 			"title": "Tabelle",
@@ -396,6 +439,9 @@
 			"deleteSuccess": "Der Webhook wurde erfolgreich gelöscht.",
 			"create": "Webhook erstellen",
 			"secret": "Schlüssel",
+			"basicauthuser": "Basic Auth User",
+			"basicauthpassword": "Basic Auth Passwort",
+			"basicauthlink": "Basic Auth verwenden?",
 			"secretHint": "Wenn angegeben, werden alle Anfragen an die Webhook Ziel-URL mit HMAC signiert.",
 			"secretDocs": "In der Dokumentation findest du weitere Informationen zum Umgang mit Schlüsseln."
 		},
@@ -422,6 +468,7 @@
 		"title": "Filter",
 		"clear": "Filter zurücksetzen",
 		"showResults": "Ergebnisse anzeigen",
+		"noResults": "Keine Ergebnisse",
 		"fromView": "Die aktuelle Ansicht hat bereits einen Filter gesetzt:",
 		"fromViewBoth": "Er wird in Kombination mit dem, was du hier setzt, verwendet.",
 		"attributes": {
@@ -553,7 +600,11 @@
 		"authenticating": "Authentifiziere…",
 		"passwordRequired": "Dieses geteilte Projekt benötigt ein Passwort. Bitte gebe es unten ein:",
 		"error": "Es ist ein Fehler aufgetreten.",
-		"invalidPassword": "Da Passwort isch ungültig."
+		"invalidPassword": "Da Passwort isch ungültig.",
+		"accessDenied": "Zugriff verweigert. Bitte überprüfe deine Berechtigungen und versuche es nochmal.",
+		"serverError": "Es ist ein Serverfehler aufgetreten. Bitte versuche es später erneut.",
+		"projectLoadError": "Fehler beim Laden der Projektinformationen.",
+		"retry": "Erneut versuchen"
 	},
 	"navigation": {
 		"overview": "Übersicht",
@@ -752,6 +803,7 @@
 		"addReminder": "Eine Erinnerung hinzufügen…",
 		"doneSuccess": "Die Uufgab isch erfolgriich als \"Fertig\" markiert wordä.",
 		"undoneSuccess": "Die Uufgaab isch nüme als fertig markiert.",
+		"movedToProject": "Die Aufgabe wurde nach {project} verschoben.",
 		"undo": "Rückgängig",
 		"openDetail": "Uufgab i de Detailaahsicht öffne",
 		"checklistTotal": "{checked} von {total} Aufgaben",
@@ -759,11 +811,13 @@
 		"show": {
 			"titleCurrent": "Momentani Uufgabe",
 			"titleDates": "Uufgabe vo {from} bis {to}",
-			"noDates": "Zeig Uufgabe ohni Datum",
+			"noDates": "Aufgaben ohne Datum anzeigen",
 			"overdue": "Überfällige Aufgaben anzeigen",
 			"fromuntil": "Aufgaben von {from} bis {until}",
 			"select": "Datumsbereich wählen",
-			"noTasks": "Nichts zu tun – Einen schönen Tag noch!"
+			"noTasks": "Nichts zu tun – Einen schönen Tag noch!",
+			"filterByLabel": "Filtern nach Label {label}",
+			"clearLabelFilter": "Label-Filter leeren"
 		},
 		"detail": {
 			"chooseDueDate": "Druck da, um es Fälligkeitsdatum z'setze",
@@ -778,8 +832,10 @@
 			"updateSuccess": "Die Uufgab isch erfolgriich g'speichered wore.",
 			"deleteSuccess": "Die Uufgab isch erfolgriich g'chüblet wore.",
 			"belongsToProject": "Diese Aufgabe gehört zum Projekt „{project}“",
+			"back": "Zurück zum Projekt",
 			"due": "Fällig bis {at}",
 			"closePopup": "Popup schließen",
+			"scrollToBottom": "Nach unten scrollen",
 			"organization": "Organisation",
 			"management": "Verwaltung",
 			"dateAndTime": "Datum und Uhrzeit",
@@ -822,6 +878,8 @@
 			"relatedTasks": "Verwandti Uufgabe",
 			"reminders": "Errinnerige",
 			"repeat": "Widerhole",
+			"comment": "{count} Kommentar | {count} Kommentare",
+			"commentCount": "Anzahl der Kommentare",
 			"startDate": "Aahfangs Datum",
 			"title": "Titl",
 			"updated": "Aktualisiert",
@@ -868,6 +926,9 @@
 			"deleteSuccess": "Der Kommentar wurde erfolgreich gelöscht.",
 			"addedSuccess": "Din Kommentar isch erfolgriich hinzuegfüegt worde.",
 			"permalink": "Permalink zu diesem Kommentar kopieren"
+		},
+		"mention": {
+			"noUsersFound": "Keine Nutzer:innen gefunden"
 		},
 		"deferDueDate": {
 			"title": "Fälligkeitsdatum verschiebe",
@@ -976,7 +1037,7 @@
 			"project4": "Zum Beispiel: {prefix}\"Projekt mit Leerzeichen\".",
 			"dateAndTime": "Datum und Ziit",
 			"date": "Jedes Datum wird als Abgabedatum für di neu Uufgab gnoh. Du chasch Date i de folgende Format verwende:",
-			"dateWeekday": "jede Wuchetaag wird nimmt s'negste Datum mit dem Datum",
+			"dateWeekday": "jeder Wochentag, wird das nächste Datum mit diesem Tag verwenden",
 			"dateCurrentYear": "nimmt das laufende Jahr",
 			"dateNth": "nimmt de {day}ti vom jetzige Monet",
 			"dateTime": "Kombiniere irgendeis vo dene Datumsformat mit \"{time}\" (oder {timePM}) um e Ziit z'setze.",
@@ -1031,7 +1092,7 @@
 			"admin": "Chef",
 			"member": "Mitglied",
 			"isPublic": "Öffentliches Team",
-			"isPublicDescription": "Machs das Team öffentlich sichtbar. Wenn aktiviert, kann jede:r mit diesem Team Projekte teilen, auch wenn er oder sie kein direktes Mitglied des Teams ist."
+			"isPublicDescription": "Macht das Team öffentlich sichtbar. Wenn aktiviert, kann jede:r mit diesem Team Projekte teilen, auch wenn er oder sie kein direktes Mitglied des Teams ist."
 		}
 	},
 	"keyboardShortcuts": {
@@ -1059,7 +1120,11 @@
 			"priority": "Die Priorität dieser Aufgabe ändern",
 			"favorite": "Diese Aufgabe zum Favoriten machen / von Favoriten entfernen",
 			"openProject": "Projekt dieser Aufgabe öffnen",
-			"save": "Aktuelle Aufgabe speichern"
+			"save": "Aktuelle Aufgabe speichern",
+			"copyIdentifier": "Task-Nummer in die Zwischenablage kopieren",
+			"copyIdentifierAndTitle": "Task-Nummer und Titel in die Zwischenablage kopieren",
+			"copyIdentifierTitleAndUrl": "Task-Nummer, Titel und URL in die Zwischenablage kopieren",
+			"copyUrl": "Task-URL in die Zwischenablage kopieren"
 		},
 		"project": {
 			"title": "Projektansichten",
@@ -1081,6 +1146,15 @@
 			"navigateDown": "Nächste Aufgabe hervorheben",
 			"navigateUp": "Vorherige Aufgabe hervorheben",
 			"open": "Markierte Aufgabe öffnen"
+		},
+		"gantt": {
+			"title": "Gantt-Diagramm",
+			"moveTaskLeft": "Aufgabe auf früheres Datum verschieben",
+			"moveTaskRight": "Aufgabe auf späteres Datum verschieben",
+			"expandTaskLeft": "Das Startdatum der Aufgabe früher verschieben",
+			"expandTaskRight": "Das Enddatum der Aufgabe später verschieben",
+			"shrinkTaskLeft": "Das Startdatum verringern",
+			"shrinkTaskRight": "Das Enddatum verringern"
 		}
 	},
 	"update": {
@@ -1223,7 +1297,7 @@
 		"9001": "Die Berechtigung isch ungültig.",
 		"10001": "De Chübl gits nid.",
 		"10002": "Diese Spalte gehört nicht zu diesem Projekt.",
-		"10003": "Du kannst die letze Spalte in einem Projekt nicht entfernen.",
+		"10003": "Du kannst die letzte Spalte in einem Projekt nicht entfernen.",
 		"10004": "Du chasch die Uufgab nid dem Chübl zue wiise, weil er d'Limite für Uufgabe erreicht het.",
 		"10005": "Es kann nur eine Erledigt-Spalte pro Projekt geben.",
 		"11001": "De g'speicheret Filter giz nid.",

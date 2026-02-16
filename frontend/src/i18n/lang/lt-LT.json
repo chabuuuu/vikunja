@@ -311,12 +311,6 @@
 				"addedSuccess": "{type} buvo sėkmingai pridėti.",
 				"updatedSuccess": "{type} buvo sėkmingai pridėti."
 			},
-			"right": {
-				"title": "Prieigos teisės",
-				"read": "Tik skaitymas",
-				"readWrite": "Skaityti & rašyti",
-				"admin": "Administratorius"
-			},
 			"attributes": {
 				"link": "Nuoroda",
 				"delete": "Ištrinti"
@@ -340,8 +334,7 @@
 			"month": "Mėnuo",
 			"day": "Diena",
 			"hour": "Valanda",
-			"range": "Datos intervalas",
-			"noDates": "Ši užduotis dar neturi nurodytos datos."
+			"range": "Datos intervalas"
 		},
 		"table": {
 			"title": "Lentelė",
@@ -750,7 +743,6 @@
 		"show": {
 			"titleCurrent": "Dabartinės Užduotys",
 			"titleDates": "Užduotys nuo {from} iki {to}",
-			"noDates": "Rodyti užduotis be datų",
 			"overdue": "Rodyti neišpildytas užduotis",
 			"fromuntil": "Užduotys nuo {from} iki {until}",
 			"select": "Pasirinkti datos rėžį",
@@ -967,7 +959,6 @@
 			"project4": "Pavyzdžiui: {prefix}\"Projektas su tarpais\".",
 			"dateAndTime": "Data ir laikas",
 			"date": "Bet kuri data bus naudojama, kaip užduoties pabaigos data. Gali naudoti datas bet kuriuo iš formatų:",
-			"dateWeekday": "bet kuri savaitės diena, bus naudojama kaip data",
 			"dateCurrentYear": "naudoti šiuos metus",
 			"dateNth": "bus naudojama {day} dabartiniam mėnesiui",
 			"dateTime": "Sujungti bet kokį datos formatą su \"{time}\" (ar {timePM}) nustatyti laiką.",
@@ -1102,7 +1093,6 @@
 	"notification": {
 		"title": "Pranešimai",
 		"none": "Neturite pranešimų. Geros dienos!",
-		"explainer": "Prisiregistravus prie projektų ar užduočių, žinutės bus publikuojamos čia.",
 		"markAllRead": "Pažymėti visus pranešimus kaip skaitytus",
 		"markAllReadSuccess": "Sėkmingai pažymėjai visus pranešimus kaip skaitytus."
 	},

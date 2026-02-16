@@ -4,7 +4,7 @@
 			{{ $t('project.share.links.title') }}
 			<span
 				v-tooltip="$t('project.share.links.explanation')"
-				class="is-size-7 has-text-grey is-italic ml-3"
+				class="is-size-7 has-text-grey is-italic mis-3"
 			>
 				{{ $t('project.share.links.what') }}
 			</span>
@@ -12,79 +12,53 @@
 
 		<div class="sharables-project">
 			<XButton
-				v-if="!(linkShares.length === 0 || showNewForm)"
+				v-if="!showNewForm"
 				icon="plus"
-				class="mb-4"
+				class="mbe-4"
 				@click="showNewForm = true"
 			>
 				{{ $t('project.share.links.create') }}
 			</XButton>
 
 			<div
-				v-if="linkShares.length === 0 || showNewForm"
+				v-if="showNewForm"
 				class="p-4"
 			>
-				<div class="field">
-					<label
-						class="label"
-						for="linkShareRight"
-					>
-						{{ $t('project.share.right.title') }}
-					</label>
-					<div class="control">
+				<FormField :label="$t('project.share.permission.title')">
+					<template #default="{ id }">
 						<div class="select">
 							<select
-								id="linkShareRight"
-								v-model="selectedRight"
+								:id="id"
+								v-model="selectedPermission"
 							>
-								<option :value="RIGHTS.READ">
-									{{ $t('project.share.right.read') }}
+								<option :value="PERMISSIONS.READ">
+									{{ $t('project.share.permission.read') }}
 								</option>
-								<option :value="RIGHTS.READ_WRITE">
-									{{ $t('project.share.right.readWrite') }}
+								<option :value="PERMISSIONS.READ_WRITE">
+									{{ $t('project.share.permission.readWrite') }}
 								</option>
-								<option :value="RIGHTS.ADMIN">
-									{{ $t('project.share.right.admin') }}
+								<option :value="PERMISSIONS.ADMIN">
+									{{ $t('project.share.permission.admin') }}
 								</option>
 							</select>
 						</div>
-					</div>
-				</div>
-				<div class="field">
-					<label
-						class="label"
-						for="linkShareName"
-					>
-						{{ $t('project.share.links.name') }}
-					</label>
-					<div class="control">
-						<input
-							id="linkShareName"
-							v-model="name"
-							v-tooltip="$t('project.share.links.nameExplanation')"
-							class="input"
-							:placeholder="$t('project.share.links.namePlaceholder')"
-						>
-					</div>
-				</div>
-				<div class="field">
-					<label
-						class="label"
-						for="linkSharePassword"
-					>
-						{{ $t('project.share.links.password') }}
-					</label>
-					<div class="control">
-						<input
-							id="linkSharePassword"
-							v-model="password"
-							v-tooltip="$t('project.share.links.passwordExplanation')"
-							type="password"
-							class="input"
-							:placeholder="$t('user.auth.passwordPlaceholder')"
-						>
-					</div>
-				</div>
+					</template>
+				</FormField>
+				<FormField
+					id="linkShareName"
+					v-model="name"
+					v-tooltip="$t('project.share.links.nameExplanation')"
+					:label="$t('project.share.links.name')"
+					:placeholder="$t('project.share.links.namePlaceholder')"
+				/>
+				<FormField
+					id="linkSharePassword"
+					v-model="password"
+					v-tooltip="$t('project.share.links.passwordExplanation')"
+					:label="$t('project.share.links.password')"
+					type="password"
+					:placeholder="$t('user.auth.passwordPlaceholder')"
+				/>
 				<XButton
 					icon="plus"
 					@click="add(projectId)"
@@ -114,12 +88,12 @@
 						<td>
 							<p
 								v-if="s.name !== ''"
-								class="mb-2 is-italic"
+								class="mbe-2 is-italic"
 							>
 								{{ s.name }}
 							</p>
 
-							<p class="mb-2">
+							<p class="mbe-2">
 								<i18n-t
 									keypath="project.share.links.sharedBy"
 									scope="global"
@@ -128,37 +102,33 @@
 								</i18n-t>
 							</p>
 
-							<p class="mb-2">
-								<template v-if="s.right === RIGHTS.ADMIN">
+							<p class="mbe-2">
+								<template v-if="s.permission === PERMISSIONS.ADMIN">
 									<span class="icon is-small">
 										<Icon icon="lock" />
 									</span>&nbsp;
-									{{ $t('project.share.right.admin') }}
+									{{ $t('project.share.permission.admin') }}
 								</template>
-								<template v-else-if="s.right === RIGHTS.READ_WRITE">
+								<template v-else-if="s.permission === PERMISSIONS.READ_WRITE">
 									<span class="icon is-small">
 										<Icon icon="pen" />
 									</span>&nbsp;
-									{{ $t('project.share.right.readWrite') }}
+									{{ $t('project.share.permission.readWrite') }}
 								</template>
 								<template v-else>
 									<span class="icon is-small">
 										<Icon icon="users" />
 									</span>&nbsp;
-									{{ $t('project.share.right.read') }}
+									{{ $t('project.share.permission.read') }}
 								</template>
 							</p>
 						
-							<div class="field has-addons no-input-mobile">
-								<div class="control">
-									<input
-										:value="shareLinks[s.id]"
-										class="input"
-										readonly
-										type="text"
-									>
-								</div>
-								<div class="control">
+							<FormField
+								:model-value="shareLinks[s.id]"
+								readonly
+								type="text"
+							>
+								<template #addon>
 									<XButton
 										v-tooltip="$t('misc.copy')"
 										:shadow="false"
@@ -168,8 +138,8 @@
 											<Icon icon="paste" />
 										</span>
 									</XButton>
-								</div>
-							</div>
+								</template>
+							</FormField>
 						</td>
 						<td v-if="availableViews.length > 0">
 							<div class="select">
@@ -186,7 +156,7 @@
 						</td>
 						<td class="actions">
 							<XButton
-								class="is-danger"
+								danger
 								icon="trash-alt"
 								@click="
 									() => {
@@ -221,7 +191,8 @@
 import {ref, watch, computed, shallowReactive} from 'vue'
 import {useI18n} from 'vue-i18n'
 
-import {RIGHTS} from '@/constants/rights'
+import {PERMISSIONS} from '@/constants/permissions'
+import FormField from '@/components/input/FormField.vue'
 import LinkShareModel from '@/models/linkShare'
 
 import type {ILinkShare} from '@/modelTypes/ILinkShare'
@@ -246,7 +217,7 @@ const {t} = useI18n({useScope: 'global'})
 
 const linkShares = ref<ILinkShare[]>([])
 const linkShareService = shallowReactive(new LinkShareService())
-const selectedRight = ref(RIGHTS.READ)
+const selectedPermission = ref(PERMISSIONS.READ)
 const name = ref('')
 const password = ref('')
 const showDeleteModal = ref(false)
@@ -296,13 +267,13 @@ watch(() => ([linkShares.value, availableViews.value]), ([newLinkShares, newProj
 
 async function add(projectId: IProject['id']) {
 	const newLinkShare = new LinkShareModel({
-		right: selectedRight.value,
+		permission: selectedPermission.value,
 		projectId,
 		name: name.value,
 		password: password.value,
 	})
 	await linkShareService.create(newLinkShare)
-	selectedRight.value = RIGHTS.READ
+	selectedPermission.value = PERMISSIONS.READ
 	name.value = ''
 	password.value = ''
 	showNewForm.value = false

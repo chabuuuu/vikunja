@@ -4,7 +4,7 @@ import UserModel from './user'
 import type {ILabel} from '@/modelTypes/ILabel'
 import type {IUser} from '@/modelTypes/IUser'
 
-import {colorIsDark} from '@/helpers/color/colorIsDark'
+import {getTextColor} from '@/helpers/color/getTextColor'
 
 export default class LabelModel extends AbstractModel<ILabel> implements ILabel {
 	id = 0
@@ -28,14 +28,8 @@ export default class LabelModel extends AbstractModel<ILabel> implements ILabel 
 			this.hexColor = '#' + this.hexColor
 		}
 
-		if (this.hexColor === '') {
-			this.hexColor = 'var(--grey-200)'
-			this.textColor = 'var(--grey-800)'
-		} else {
-			this.textColor = colorIsDark(this.hexColor)
-				// Fixed colors to avoid flipping in dark mode
-				? 'hsl(215, 27.9%, 16.9%)' // grey-800
-				: 'hsl(220, 13%, 91%)' // grey-200
+		if (this.hexColor !== '') {
+			this.textColor = getTextColor(this.hexColor)
 		}
 
 		this.createdBy = new UserModel(this.createdBy)

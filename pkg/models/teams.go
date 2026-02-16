@@ -59,8 +59,8 @@ type Team struct {
 	// Query parameter controlling whether to include public projects or not
 	IncludePublic bool `xorm:"-" query:"include_public" json:"include_public"`
 
-	web.CRUDable `xorm:"-" json:"-"`
-	web.Rights   `xorm:"-" json:"-"`
+	web.CRUDable    `xorm:"-" json:"-"`
+	web.Permissions `xorm:"-" json:"-"`
 }
 
 // TableName makes beautiful table names
@@ -84,8 +84,8 @@ type TeamMember struct {
 	// A timestamp when this relation was created. You cannot change this value.
 	Created time.Time `xorm:"created not null" json:"created"`
 
-	web.CRUDable `xorm:"-" json:"-"`
-	web.Rights   `xorm:"-" json:"-"`
+	web.CRUDable    `xorm:"-" json:"-"`
+	web.Permissions `xorm:"-" json:"-"`
 }
 
 // TableName makes beautiful table names
@@ -395,4 +395,74 @@ func (t *Team) Update(s *xorm.Session, _ web.Auth) (err error) {
 	}
 
 	return
+}
+
+func cleanupTaskMembersAfterTeamRemoval(s *xorm.Session, teamID int64, memberID int64) (err error) {
+	teamProjectIDs := []int64{}
+	err = s.Table("team_projects").
+		Select("project_id").
+		Where("team_id = ?", teamID).
+		Find(&teamProjectIDs)
+	if err != nil {
+		return err
+	}
+
+	if len(teamProjectIDs) == 0 {
+		return nil
+	}
+
+	projectsToCleanup := make([]int64, 0, len(teamProjectIDs))
+	for _, projectID := range teamProjectIDs {
+		project, projErr := GetProjectSimpleByID(s, projectID)
+		if projErr != nil {
+			if IsErrProjectDoesNotExist(projErr) {
+				projectsToCleanup = append(projectsToCleanup, projectID)
+				continue
+			}
+			return projErr
+		}
+
+		canRead, _, permErr := project.CanRead(s, &user.User{ID: memberID})
+		if permErr != nil {
+			return permErr
+		}
+
+		if !canRead {
+			projectsToCleanup = append(projectsToCleanup, projectID)
+		}
+	}
+
+	if len(projectsToCleanup) == 0 {
+		return nil
+	}
+
+	taskIDs := []int64{}
+	err = s.Table("tasks").
+		Select("id").
+		In("project_id", projectsToCleanup).
+		Find(&taskIDs)
+	if err != nil {
+		return err
+	}
+
+	if len(taskIDs) > 0 {
+		_, err = s.In("task_id", taskIDs).
+			And("user_id = ?", memberID).
+			Delete(&TaskAssginee{})
+		if err != nil {
+			return err
+		}
+
+		_, err = s.In("entity_id", taskIDs).
+			Where("entity_type = ? AND user_id = ?", SubscriptionEntityTask, memberID).
+			Delete(&Subscription{})
+		if err != nil {
+			return err
+		}
+	}
+
+	_, err = s.In("entity_id", projectsToCleanup).
+		Where("entity_type = ? AND user_id = ?", SubscriptionEntityProject, memberID).
+		Delete(&Subscription{})
+	return err
 }

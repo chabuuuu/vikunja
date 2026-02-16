@@ -309,12 +309,6 @@
 				"addedSuccess": "ה-{type} נתווסף בהצלחה.",
 				"updatedSuccess": "ה-{type} נתווסף בהצלחה."
 			},
-			"right": {
-				"title": "הרשאה",
-				"read": "קריאה בלבד",
-				"readWrite": "קריאה וכתיבה",
-				"admin": "מנהל"
-			},
 			"attributes": {
 				"link": "לינק",
 				"delete": "מחיקה"
@@ -338,8 +332,7 @@
 			"month": "חודש",
 			"day": "יום",
 			"hour": "שעה",
-			"range": "טווח תאריכים",
-			"noDates": "חסרים תאריכים למטלה."
+			"range": "טווח תאריכים"
 		},
 		"table": {
 			"title": "טבלה",
@@ -732,7 +725,6 @@
 		"show": {
 			"titleCurrent": "מטלות עדכניות",
 			"titleDates": "מטלות מ-{from} ועד {to}",
-			"noDates": "הצג מטלות בלי תאריך",
 			"overdue": "הצג מטלות באיחור",
 			"fromuntil": "מטלות מ-{from} ועד {until}",
 			"select": "בחירת טווח תאריכים",

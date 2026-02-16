@@ -1,5 +1,6 @@
 <template>
 	<div
+		ref="taskViewContainer"
 		class="loader-container task-view-container"
 		:class="{
 			'is-loading': taskService.loading || !visible,
@@ -11,6 +12,14 @@
 			v-if="visible"
 			class="task-view"
 		>
+			<BaseButton
+				v-if="!isModal || isMobile"
+				class="back-button mbs-2"
+				@click="lastProject ? router.back() : router.push(projectRoute)"
+			>
+				<Icon icon="arrow-left" />
+				{{ $t('task.detail.back') }}
+			</BaseButton>
 			<Heading
 				ref="heading"
 				:task="task"
@@ -28,7 +37,7 @@
 					:key="p.id"
 				>
 					<a
-						v-if="router.options.history.state.back?.includes('/projects/'+p.id+'/') || false"
+						v-if="router.options.history.state?.back?.includes('/projects/'+p.id+'/') || false"
 						v-shortcut="p.id === project?.id ? 'u' : ''"
 						@click="router.back()"
 					>
@@ -51,7 +60,7 @@
 			<ChecklistSummary :task="task" />
 
 			<!-- Content and buttons -->
-			<div class="columns mt-2">
+			<div class="columns mbs-2">
 				<!-- Content -->
 				<div
 					:class="{'is-two-thirds': canWrite}"
@@ -77,7 +86,7 @@
 							<AssigneeList
 								v-else
 								:assignees="task.assignees"
-								class="mt-2"
+								class="mbs-2"
 							/>
 						</div>
 						<CustomTransition
@@ -338,7 +347,7 @@
 
 					<!-- Attachments -->
 					<div
-						v-if="activeFields.attachments || hasAttachments"
+						v-show="activeFields.attachments || hasAttachments"
 						class="content attachments"
 					>
 						<Attachments
@@ -352,7 +361,7 @@
 					<!-- Related Tasks -->
 					<div
 						v-if="activeFields.relatedTasks"
-						class="content details mb-0"
+						class="content details mbe-0"
 					>
 						<h3>
 							<span class="icon is-grey">
@@ -396,7 +405,14 @@
 					<Comments
 						:can-write="canWrite"
 						:task-id="taskId"
+						:project-id="task.projectId"
 						:initial-comments="task.comments"
+					/>
+
+					<!-- Marker element for scroll-to-bottom button visibility -->
+					<div
+						ref="contentBottomMarker"
+						class="content-bottom-marker"
 					/>
 				</div>
 				
@@ -408,9 +424,8 @@
 					<template v-if="canWrite">
 						<XButton
 							v-shortcut="'t'"
-							:class="{'is-success': !task.done}"
-							:shadow="task.done"
-							class="is-outlined has-no-border"
+							:class="{'is-pending': !task.done}"
+							class="button--mark-done"
 							icon="check-double"
 							variant="secondary"
 							@click="toggleTaskDone()"
@@ -530,7 +545,7 @@
 							{{ $t('task.detail.actions.endDate') }}
 						</XButton>
 						<XButton
-							v-shortcut="'Alt+r'"
+							v-shortcut="reminderShortcut"
 							variant="secondary"
 							:icon="['far', 'clock']"
 							@click="setFieldActive('reminders')"
@@ -566,6 +581,16 @@
 			/>
 		</div>
 
+		<BaseButton
+			v-if="showScrollToCommentsButton"
+			v-tooltip="$t('task.detail.scrollToBottom')"
+			class="scroll-to-comments-button d-print-none"
+			:aria-label="$t('task.detail.scrollToBottom')"
+			@click="scrollToBottom"
+		>
+			<Icon icon="chevron-down" />
+		</BaseButton>
+
 		<Modal
 			:enabled="showDeleteModal"
 			@close="showDeleteModal = false"
@@ -576,7 +601,7 @@
 			</template>
 
 			<template #text>
-				<p class="tw-text-balance !tw-mb-0">
+				<p class="tw-text-balance">
 					{{ $t('task.detail.delete.text1') }}
 				</p>
 				<p class="tw-text-balance">
@@ -588,13 +613,12 @@
 </template>
 
 <script lang="ts" setup>
-import {ref, reactive, shallowReactive, computed, watch, nextTick, onMounted, onBeforeUnmount} from 'vue'
-import {useRouter, type RouteLocation} from 'vue-router'
+import {ref, reactive, shallowReactive, computed, watch, nextTick, onMounted} from 'vue'
+import {useRouter, useRoute, type RouteLocation, onBeforeRouteLeave} from 'vue-router'
 import {storeToRefs} from 'pinia'
 import {useI18n} from 'vue-i18n'
-import {unrefElement} from '@vueuse/core'
+import {unrefElement, useDebounceFn, useElementSize, useIntersectionObserver, useMediaQuery, useMutationObserver} from '@vueuse/core'
 import {klona} from 'klona/lite'
-import {eventToHotkeyString} from '@github/hotkey'
 
 import TaskService from '@/services/task'
 import TaskModel from '@/models/task'
@@ -603,7 +627,7 @@ import type {ITask} from '@/modelTypes/ITask'
 import type {IProject} from '@/modelTypes/IProject'
 
 import {PRIORITIES, type Priority} from '@/constants/priorities'
-import {RIGHTS} from '@/constants/rights'
+import {PERMISSIONS} from '@/constants/permissions'
 
 import BaseButton from '@/components/base/BaseButton.vue'
 
@@ -631,6 +655,7 @@ import Reactions from '@/components/input/Reactions.vue'
 
 import {uploadFile} from '@/helpers/attachments'
 import {getProjectTitle} from '@/helpers/getProjectTitle'
+import {isAppleDevice} from '@/helpers/isAppleDevice'
 import {scrollIntoView} from '@/helpers/scrollIntoView'
 import {TASK_REPEAT_MODES} from '@/types/IRepeatMode'
 import {playPopSound} from '@/helpers/playPop'
@@ -643,6 +668,7 @@ import {useAuthStore} from '@/stores/auth'
 import {useBaseStore} from '@/stores/base'
 
 import {useTitle} from '@/composables/useTitle'
+import {useTaskDetailShortcuts} from '@/composables/useTaskDetailShortcuts'
 
 import {success} from '@/message'
 import type {Action as MessageAction} from '@/message'
@@ -657,6 +683,7 @@ defineEmits<{
 }>()
 
 const router = useRouter()
+const route = useRoute()
 const {t} = useI18n({useScope: 'global'})
 
 const projectStore = useProjectStore()
@@ -668,25 +695,57 @@ const authStore = useAuthStore()
 const baseStore = useBaseStore()
 
 const task = ref<ITask>(new TaskModel())
+const taskNotFound = ref(false)
 const taskTitle = computed(() => task.value.title)
 useTitle(taskTitle)
 
-// See https://github.com/github/hotkey/discussions/85#discussioncomment-5214660
-function saveTaskViaHotkey(event) {
-	const hotkeyString = eventToHotkeyString(event)
-	if (!hotkeyString) return
-	if (hotkeyString !== 'Control+s' && hotkeyString !== 'Meta+s') return
-	event.preventDefault()
+const lastProject = computed(() => {
+	const backRoute = router.options.history.state?.back
+	if (!backRoute || typeof backRoute !== 'string') {
+		return null
+	}
 
-	saveTask()
-}
+	const projectMatch = backRoute.match(/\/projects\/(-?\d+)/)
+	if (!projectMatch || !projectMatch[1]) {
+		return null
+	}
 
-onMounted(() => {
-	document.addEventListener('keydown', saveTaskViaHotkey)
+	const id = parseInt(projectMatch[1])
+
+	return projectStore.projects[id] ?? null
 })
 
-onBeforeUnmount(() => {
-	document.removeEventListener('keydown', saveTaskViaHotkey)
+const lastProjectOrTaskProject = computed(() => lastProject.value ?? project.value)
+
+// Use Shift+R on macOS (Alt+R produces special characters depending on keyboard layout)
+// Use Alt+r on other platforms
+const reminderShortcut = computed(() => isAppleDevice() ? 'Shift+R' : 'Alt+r')
+
+onBeforeRouteLeave(async () => {
+	if (taskNotFound.value) {
+		return
+	}
+
+	if (!lastProjectOrTaskProject.value) {
+		await new Promise<void>((resolve) => {
+			const timeout = setTimeout(() => {
+				stop()
+				resolve()
+			}, 5000) // 5 second timeout
+			
+			const stop = watch(lastProjectOrTaskProject, (p) => {
+				if (p) {
+					clearTimeout(timeout)
+					stop()
+					resolve()
+				}
+			})
+		})
+	}
+
+	if (lastProjectOrTaskProject.value) {
+		await baseStore.handleSetCurrentProjectIfNotSet(lastProjectOrTaskProject.value)
+	}
 })
 
 // We doubled the task color property here because verte does not have a real change property, leading
@@ -702,9 +761,15 @@ const visible = ref(false)
 
 const project = computed(() => projectStore.projects[task.value.projectId])
 
+const projectRoute = computed(() => ({
+	name: 'project.index',
+	params: {projectId: task.value.projectId},
+	hash: route.hash,
+}))
+
 const canWrite = computed(() => (
-	task.value.maxRight !== null &&
-	task.value.maxRight > RIGHTS.READ
+	task.value.maxPermission !== null &&
+	task.value.maxPermission > PERMISSIONS.READ
 ))
 
 const color = computed(() => {
@@ -716,6 +781,7 @@ const color = computed(() => {
 })
 
 const isModal = computed(() => Boolean(props.backdropView))
+const isMobile = useMediaQuery('(max-width: 1024px)')
 
 function attachmentUpload(file: File, onSuccess?: (url: string) => void) {
 	return uploadFile(props.taskId, file, onSuccess)
@@ -726,6 +792,82 @@ const heading = ref<HTMLElement | null>(null)
 async function scrollToHeading() {
 	scrollIntoView(unrefElement(heading))
 }
+
+const taskViewContainer = ref<HTMLElement | null>(null)
+const scrollContainer = ref<HTMLElement | null>(null)
+const contentBottomMarker = ref<HTMLElement | null>(null)
+const bottomMarkerVisible = ref(true)
+const isScrollable = ref(false)
+
+function resolveScrollContainer() {
+	let el = taskViewContainer.value
+
+	while (el) {
+		const overflowY = getComputedStyle(el).overflowY
+		if (['auto', 'scroll', 'overlay'].includes(overflowY)) {
+			scrollContainer.value = el
+			return
+		}
+		el = el.parentElement
+	}
+
+	scrollContainer.value = (document.scrollingElement as HTMLElement | null) ?? document.documentElement
+}
+
+function updateScrollable() {
+	const scroller = scrollContainer.value
+	if (!scroller) {
+		isScrollable.value = false
+		return
+	}
+
+	isScrollable.value = scroller.scrollHeight > scroller.clientHeight + 1
+}
+
+const showScrollToCommentsButton = computed(() => {
+	return isScrollable.value && !bottomMarkerVisible.value
+})
+
+function scrollToBottom() {
+	if (!contentBottomMarker.value) {
+		return
+	}
+
+	contentBottomMarker.value.scrollIntoView({
+		behavior: 'smooth',
+		block: 'end',
+		inline: 'nearest',
+	})
+}
+
+useIntersectionObserver(
+	contentBottomMarker,
+	([entry]) => {
+		bottomMarkerVisible.value = entry?.isIntersecting ?? true
+	},
+	{threshold: 0.1},
+)
+
+const debouncedMutationHandler = useDebounceFn(async () => {
+	await nextTick()
+	resolveScrollContainer()
+	updateScrollable()
+}, 100)
+
+useMutationObserver(
+	taskViewContainer,
+	debouncedMutationHandler,
+	{subtree: true, childList: true},
+)
+
+const {height: scrollContainerHeight} = useElementSize(scrollContainer)
+watch(scrollContainerHeight, () => updateScrollable())
+
+onMounted(async () => {
+	await nextTick()
+	resolveScrollContainer()
+	updateScrollable()
+})
 
 const taskService = shallowReactive(new TaskService())
 
@@ -738,13 +880,23 @@ watch(
 		}
 
 		try {
-			const loaded = await taskService.get({id}, {expand: ['reactions', 'comments']})
+			const loaded = await taskService.get({id}, {expand: ['reactions', 'comments', 'is_unread']})
 			Object.assign(task.value, loaded)
 			attachmentStore.set(task.value.attachments)
 			taskColor.value = task.value.hexColor
 			setActiveFields()
+
+			if (task.value.isUnread) {
+				await taskStore.markTaskAsRead(task.value.id)
+				task.value.isUnread = false
+			}
+
+			if (lastProject.value) {
+				await baseStore.handleSetCurrentProjectIfNotSet(lastProject.value)
+			}
 		} catch (e) {
 			if (e?.response?.status === 404) {
+				taskNotFound.value = true
 				router.replace({name: 'not-found'})
 				return
 			}
@@ -753,6 +905,8 @@ watch(
 		} finally {
 			await nextTick()
 			scrollToHeading()
+			resolveScrollContainer()
+			updateScrollable()
 			visible.value = true
 		}
 	}, {immediate: true})
@@ -881,6 +1035,12 @@ async function saveTask(
 	success({message: t('task.detail.updateSuccess')}, actions)
 }
 
+useTaskDetailShortcuts({
+	task: () => task.value,
+	taskTitle: () => taskTitle.value,
+	onSave: saveTask,
+})
+
 const showDeleteModal = ref(false)
 
 async function deleteTask() {
@@ -905,7 +1065,10 @@ async function toggleTaskDone() {
 	)
 }
 
-async function changeProject(project: IProject) {
+async function changeProject(project: IProject | null) {
+	if (project === null) {
+		return
+	}
 	kanbanStore.removeTaskInBucket(task.value)
 	await saveTask({
 		...task.value,
@@ -961,15 +1124,15 @@ function setRelatedTasksActive() {
 .task-view-container {
 	// simulate sass lighten($primary, 30) by increasing lightness 30% to 73%
 	--primary-light: hsla(var(--primary-h), var(--primary-s), 73%, var(--primary-a));
-	padding-bottom: 0;
+	padding-block-end: 0;
 
 	@media screen and (min-width: $desktop) {
-		padding-bottom: 1rem;
+		padding-block-end: 1rem;
 	}
 }
 
 .task-view {
-	padding-top: 1rem;
+	padding-block-start: 1rem;
 	padding-inline: .5rem;
 	background-color: var(--site-background);
 
@@ -984,7 +1147,7 @@ function setRelatedTasksActive() {
 	color: var(--text);
 	background-color: var(--site-background) !important;
 
-	@media screen and (max-width: calc(#{$desktop} + 1px)) {
+	@media screen and (width <= calc(#{$desktop} + 1px)) {
 		border-radius: 0;
 	}
 }
@@ -1000,7 +1163,7 @@ function setRelatedTasksActive() {
 
 .subtitle {
 	color: var(--grey-500);
-	margin-bottom: 1rem;
+	margin-block-end: 1rem;
 
 	a {
 		color: var(--grey-800);
@@ -1023,12 +1186,12 @@ h3 .button {
 .remove {
 	color: var(--danger);
 	vertical-align: middle;
-	padding-left: .5rem;
+	padding-inline-start: .5rem;
 	line-height: 1;
 }
 
 :deep(.datepicker) {
-	width: 100%;
+	inline-size: 100%;
 
 	.show {
 		color: var(--text);
@@ -1037,8 +1200,8 @@ h3 .button {
 		border-radius: $radius;
 		display: block;
 		margin: .1rem 0;
-		width: 100%;
-		text-align: left;
+		inline-size: 100%;
+		text-align: start;
 
 		&:hover {
 			background: var(--white);
@@ -1051,9 +1214,9 @@ h3 .button {
 }
 
 .details {
-	padding-bottom: 0.75rem;
+	padding-block-end: 0.75rem;
 	flex-flow: row wrap;
-	margin-bottom: 0;
+	margin-block-end: 0;
 
 	.detail-title {
 		display: block;
@@ -1076,7 +1239,7 @@ h3 .button {
 .assignees {
 	:deep(.multiselect) {
 		.input-wrapper {
-			&:not(:focus-within):not(:hover) {
+			&:not(:focus-within, :hover) {
 				background: transparent;
 				border-color: transparent;
 			}
@@ -1125,27 +1288,42 @@ h3 .button {
 }
 
 .attachments {
-	margin-bottom: 0;
+	margin-block-end: 0;
 
 	table tr:last-child td {
-		border-bottom: none;
+		border-inline-end: none;
 	}
 }
 
 .action-buttons {
 	@media screen and (min-width: $tablet) {
 		position: sticky;
-		top: $navbar-height + 1.5rem;
+		inset-block-start: $navbar-height + 1.5rem;
 		align-self: flex-start;
 	}
 
 	.button {
-		width: 100%;
-		margin-bottom: .5rem;
+		inline-size: 100%;
+		margin-block-end: .5rem;
 		justify-content: left;
 
 		&.has-light-text {
 			color: var(--white);
+		}
+
+		&.button--mark-done {
+			background-color: transparent;
+			box-shadow: none;
+
+			&.is-pending {
+				color: var(--success);
+
+				&:hover,
+				&:focus {
+					background-color: var(--success);
+					color: #ffffff;
+				}
+			}
 		}
 	}
 }
@@ -1153,22 +1331,22 @@ h3 .button {
 .is-modal .action-buttons {
 	// we need same top margin for the modal close button 
 	@media screen and (min-width: $tablet) {
-		top: 6.5rem;
+		inset-block-start: 6.5rem;
 	}
 	// this is the moment when the fixed close button is outside the modal
 	// => we can fill up the space again
-	@media screen and (min-width: calc(#{$desktop} + 84px)) {
-		top: 0;
+	@media screen and (width >= calc(#{$desktop} + 84px)) {
+		inset-block-start: 0;
 	}
 }
 
 .checklist-summary {
-	padding-left: .25rem;
+	padding-inline-start: .25rem;
 }
 
 .detail-content {
 	@media print {
-		width: 100% !important;
+		inline-size: 100% !important;
 	}
 }
 
@@ -1179,5 +1357,43 @@ h3 .button {
 	font-weight: 700;
 	margin: .5rem 0;
 	display: inline-block;
+}
+
+.scroll-to-comments-button {
+	position: fixed;
+	// Position above the keyboard shortcuts button (which is at bottom: calc(1rem - 4px))
+	inset-block-end: 2.5rem;
+	inset-inline-end: .75rem;
+	z-index: 10;
+	inline-size: 2rem;
+	block-size: 2rem;
+	border-radius: 100%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+	background-color: var(--site-background);
+	border: 1px solid var(--grey-300);
+	color: var(--grey-500);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+	transition: all $transition;
+
+	&:hover {
+		background-color: var(--grey-100);
+		color: var(--grey-700);
+	}
+
+	@media screen and (max-width: $tablet) {
+		// Hide on mobile since keyboard shortcuts button is also hidden
+		display: none;
+	}
+}
+</style>
+
+<style lang="scss">
+// global style to override position when the modal task detail is active
+.modal-content .scroll-to-comments-button {
+	inset-block-end: .75rem;
+	inset-inline-end: 1rem;
 }
 </style>

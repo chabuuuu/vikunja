@@ -59,7 +59,7 @@ type Task struct {
 	Description string `xorm:"longtext null" json:"description"`
 	// Whether a task is done or not.
 	Done bool `xorm:"INDEX null" json:"done"`
-	// The time when a task was marked as done.
+	// The time when a task was marked as done. This field is system-controlled and cannot be set via API.
 	DoneAt time.Time `xorm:"INDEX null 'done_at'" json:"done_at"`
 	// The time when the task is due.
 	DueDate time.Time `xorm:"DATETIME INDEX null 'due_date'" json:"due_date"`
@@ -106,6 +106,8 @@ type Task struct {
 	// True if a task is a favorite task. Favorite tasks show up in a separate "Important" project. This value depends on the user making the call to the api.
 	IsFavorite bool `xorm:"-" json:"is_favorite"`
 
+	IsUnread *bool `xorm:"-" json:"is_unread,omitempty"`
+
 	// The subscription status for the user reading this task. You can only read this property, use the subscription endpoints to modify it.
 	// Will only returned when retrieving one task.
 	Subscription *Subscription `xorm:"-" json:"subscription,omitempty"`
@@ -125,8 +127,11 @@ type Task struct {
 	// All comments of this task. Only present when fetching tasks with the `expand` parameter set to `comments`.
 	Comments []*TaskComment `xorm:"-" json:"comments,omitempty"`
 
+	// Comment count of this task. Only present when fetching tasks with the `expand` parameter set to `comment_count`.
+	CommentCount *int64 `xorm:"-" json:"comment_count,omitempty"`
+
 	// Behaves exactly the same as with the TaskCollection.Expand parameter
-	Expand []TaskCollectionExpandable `xorm:"-" json:"-" query:"expand"`
+	Expand []TaskCollectionExpandable `xorm:"-" json:"-" query:"expand[]"`
 
 	// The position of the task - any task project can be sorted as usual by this parameter.
 	// When accessing tasks via views with buckets, this is primarily used to sort them based on a range.
@@ -141,8 +146,8 @@ type Task struct {
 	CreatedBy   *user.User `xorm:"-" json:"created_by" valid:"-"`
 	CreatedByID int64      `xorm:"bigint not null" json:"-"` // ID of the user who put that task on the project
 
-	web.CRUDable `xorm:"-" json:"-"`
-	web.Rights   `xorm:"-" json:"-"`
+	web.CRUDable    `xorm:"-" json:"-"`
+	web.Permissions `xorm:"-" json:"-"`
 }
 
 type TaskWithComments struct {
@@ -216,7 +221,7 @@ type taskSearchOptions struct {
 // @Security JWTKeyAuth
 // @Success 200 {array} models.Task "The tasks"
 // @Failure 500 {object} models.Message "Internal error"
-// @Router /tasks/all [get]
+// @Router /tasks [get]
 func (t *Task) ReadAll(_ *xorm.Session, _ web.Auth, _ string, _ int, _ int) (result interface{}, resultCount int, totalItems int64, err error) {
 	return nil, 0, 0, nil
 }
@@ -371,22 +376,6 @@ func GetTasksSimpleByIDs(s *xorm.Session, ids []int64) (tasks []*Task, err error
 	return
 }
 
-// GetTasksByIDs returns all tasks for a project of ids
-func (bt *BulkTask) GetTasksByIDs(s *xorm.Session) (err error) {
-	for _, id := range bt.IDs {
-		if id < 1 {
-			return ErrTaskDoesNotExist{id}
-		}
-	}
-
-	err = s.In("id", bt.IDs).Find(&bt.Tasks)
-	if err != nil {
-		return
-	}
-
-	return
-}
-
 func GetTaskSimpleByUUID(s *xorm.Session, uid string) (task *Task, err error) {
 	var has bool
 	task = &Task{}
@@ -425,12 +414,35 @@ func getRemindersForTasks(s *xorm.Session, taskIDs []int64) (reminders []*TaskRe
 }
 
 func (t *Task) setIdentifier(project *Project) {
-	if project == nil || (project != nil && project.Identifier == "") {
+	if project == nil || project.Identifier == "" {
 		t.Identifier = "#" + strconv.FormatInt(t.Index, 10)
 		return
 	}
 
 	t.Identifier = project.Identifier + "-" + strconv.FormatInt(t.Index, 10)
+}
+
+func addIsUnreadToTasks(s *xorm.Session, taskIDs []int64, taskMap map[int64]*Task, a web.Auth) (err error) {
+	if len(taskIDs) == 0 {
+		return nil
+	}
+
+	unreadStatuses := []*TaskUnreadStatus{}
+	err = s.In("task_id", taskIDs).
+		Where("user_id = ?", a.GetID()).
+		Find(&unreadStatuses)
+	if err != nil {
+		return err
+	}
+
+	b := true
+	for _, status := range unreadStatuses {
+		if task, exists := taskMap[status.TaskID]; exists {
+			task.IsUnread = &b
+		}
+	}
+
+	return nil
 }
 
 // Get all assignees
@@ -603,6 +615,8 @@ func addBucketsToTasks(s *xorm.Session, a web.Auth, taskIDs []int64, taskMap map
 
 // This function takes a map with pointers and returns a slice with pointers to tasks
 // It adds more stuff like assignees/labels/etc to a bunch of tasks
+//
+//nolint:gocyclo
 func addMoreInfoToTasks(s *xorm.Session, taskMap map[int64]*Task, a web.Auth, view *ProjectView, expand []TaskCollectionExpandable) (err error) {
 
 	// No need to iterate over users and stuff if the project doesn't have tasks
@@ -667,6 +681,35 @@ func addMoreInfoToTasks(s *xorm.Session, taskMap map[int64]*Task, a web.Auth, vi
 		for _, position := range positions {
 			positionsMap[position.TaskID] = position
 		}
+
+		// For saved filter views, ensure all tasks have positions
+		// This is a safety net - the cron job handles bulk position creation,
+		// but we need immediate positions for newly matching tasks
+		if GetSavedFilterIDFromProjectID(view.ProjectID) > 0 {
+			tasksNeedingPositions := make([]*Task, 0)
+			for _, task := range taskMap {
+				if _, hasPosition := positionsMap[task.ID]; !hasPosition {
+					tasksNeedingPositions = append(tasksNeedingPositions, task)
+				}
+			}
+
+			if len(tasksNeedingPositions) > 0 {
+				// Create positions for tasks that don't have them
+				if err = createPositionsForTasksInView(s, tasksNeedingPositions, view, a); err != nil {
+					return err
+				}
+
+				// Reload positions after creation
+				positions, err = getPositionsForView(s, view)
+				if err != nil {
+					return err
+				}
+				positionsMap = make(map[int64]*TaskPosition, len(positions))
+				for _, p := range positions {
+					positionsMap[p.TaskID] = p
+				}
+			}
+		}
 	}
 
 	var reactions map[int64]ReactionMap
@@ -694,6 +737,16 @@ func addMoreInfoToTasks(s *xorm.Session, taskMap map[int64]*Task, a web.Auth, vi
 				err = addCommentsToTasks(s, taskIDs, taskMap)
 				if err != nil {
 					return err
+				}
+			case TaskCollectionExpandCommentCount:
+				err = addCommentCountToTasks(s, taskIDs, taskMap)
+				if err != nil {
+					return err
+				}
+			case TaskCollectionExpandIsUnread:
+				err = addIsUnreadToTasks(s, taskIDs, taskMap, a)
+				if err != nil {
+					return
 				}
 			}
 			expanded[expandable] = true
@@ -1020,9 +1073,13 @@ func setTaskInBucketInViews(s *xorm.Session, t *Task, a web.Auth, setBucket bool
 // @Failure 403 {object} web.HTTPError "The user does not have access to the task (aka its project)"
 // @Failure 500 {object} models.Message "Internal error"
 // @Router /tasks/{id} [post]
-//
-//nolint:gocyclo
+// Update updates a project task by delegating to the shared bulk helper.
 func (t *Task) Update(s *xorm.Session, a web.Auth) (err error) {
+	return t.updateSingleTask(s, a, nil)
+}
+
+//nolint:gocyclo
+func (t *Task) updateSingleTask(s *xorm.Session, a web.Auth, fields []string) (err error) {
 
 	// Check if the task exists and get the old values
 	ot, err := GetTaskByIDSimple(s, t.ID)
@@ -1059,12 +1116,73 @@ func (t *Task) Update(s *xorm.Session, a web.Auth) (err error) {
 		"start_date",
 		"end_date",
 		"hex_color",
-		"done_at",
 		"percent_done",
 		"project_id",
 		"bucket_id",
 		"repeat_mode",
 		"cover_image_attachment_id",
+	}
+
+	// Validate fields if provided
+	if len(fields) > 0 {
+		allowed := map[string]bool{}
+		for _, c := range colsToUpdate {
+			allowed[c] = true
+		}
+		cols := []string{}
+		fieldSet := map[string]bool{}
+		for _, f := range fields {
+			if !allowed[f] {
+				return ErrInvalidTaskColumn{Column: f}
+			}
+			cols = append(cols, f)
+			fieldSet[f] = true
+		}
+		colsToUpdate = cols
+
+		if !fieldSet["title"] {
+			t.Title = ot.Title
+		}
+		if !fieldSet["description"] {
+			t.Description = ot.Description
+		}
+		if !fieldSet["done"] {
+			t.Done = ot.Done
+			t.DoneAt = ot.DoneAt
+		}
+		if !fieldSet["due_date"] {
+			t.DueDate = ot.DueDate
+		}
+		if !fieldSet["repeat_after"] {
+			t.RepeatAfter = ot.RepeatAfter
+		}
+		if !fieldSet["priority"] {
+			t.Priority = ot.Priority
+		}
+		if !fieldSet["start_date"] {
+			t.StartDate = ot.StartDate
+		}
+		if !fieldSet["end_date"] {
+			t.EndDate = ot.EndDate
+		}
+		if !fieldSet["hex_color"] {
+			t.HexColor = ot.HexColor
+		}
+		if !fieldSet["percent_done"] {
+			t.PercentDone = ot.PercentDone
+		}
+		if !fieldSet["project_id"] {
+			t.ProjectID = ot.ProjectID
+		}
+		if !fieldSet["bucket_id"] {
+			t.BucketID = ot.BucketID
+		}
+		if !fieldSet["repeat_mode"] {
+			t.RepeatMode = ot.RepeatMode
+		}
+		if !fieldSet["cover_image_attachment_id"] {
+			t.CoverImageAttachmentID = ot.CoverImageAttachmentID
+		}
 	}
 
 	// If the task is being moved between projects, make sure to move the bucket + index as well
@@ -1114,7 +1232,7 @@ func (t *Task) Update(s *xorm.Session, a web.Auth) (err error) {
 				ProjectViewID: view.ID,
 				ProjectID:     t.ProjectID,
 			}
-			err = tb.Update(s, a)
+			err = updateTaskBucket(s, a, tb)
 			if err != nil {
 				return err
 			}
@@ -1124,7 +1242,7 @@ func (t *Task) Update(s *xorm.Session, a web.Auth) (err error) {
 				return err
 			}
 
-			err = tp.Update(s, a)
+			err = updateTaskPosition(s, a, tp)
 			if err != nil {
 				return err
 			}
@@ -1140,7 +1258,10 @@ func (t *Task) Update(s *xorm.Session, a web.Auth) (err error) {
 	}
 
 	// When a repeating task is marked as done, we update all deadlines and reminders and set it as undone
-	updateDone(&ot, t)
+	updateDoneAt := updateDone(&ot, t)
+	if updateDoneAt {
+		colsToUpdate = append(colsToUpdate, "done_at")
+	}
 
 	// Update the reminders
 	if err := ot.updateReminders(s, t); err != nil {
@@ -1184,7 +1305,7 @@ func (t *Task) Update(s *xorm.Session, a web.Auth) (err error) {
 	//
 	// Maybe FIXME:
 	// I've disabled this for now, because it requires significant changes in the way we do updates (using the
-	// Update() function. We need a user object in updateTaskLabels to check if the user has the right to see
+	// Update() function. We need a user object in updateTaskLabels to check if the user has the permission to see
 	// the label it is currently adding. To do this, we'll need to update the webhandler to let it pass the current
 	// user object (like it's already the case with the create method). However when we change it, that'll break
 	// a lot of existing code which we'll then need to refactor.
@@ -1288,6 +1409,20 @@ func (t *Task) Update(s *xorm.Session, a web.Auth) (err error) {
 	return updateProjectLastUpdated(s, &Project{ID: t.ProjectID})
 }
 
+// updateTasks updates multiple tasks with the same payload.
+// If fields is nil, it updates the default set of columns.
+func updateTasks(s *xorm.Session, a web.Auth, t *Task, ids []int64, fields []string) (tasks []*Task, err error) {
+	for _, id := range ids {
+		nt := clone.Clone(t)
+		nt.ID = id
+		if err := nt.updateSingleTask(s, a, fields); err != nil {
+			return []*Task{}, err
+		}
+		tasks = append(tasks, nt)
+	}
+	return tasks, nil
+}
+
 func (t *Task) moveTaskToDoneBuckets(s *xorm.Session, a web.Auth, views []*ProjectView) error {
 	for _, view := range views {
 		currentTaskBucket := &TaskBucket{}
@@ -1328,7 +1463,7 @@ func (t *Task) moveTaskToDoneBuckets(s *xorm.Session, a web.Auth, views []*Proje
 			ProjectViewID: view.ID,
 			ProjectID:     t.ProjectID,
 		}
-		err = tb.Update(s, a)
+		err = updateTaskBucket(s, a, tb)
 		if err != nil {
 			return err
 		}
@@ -1338,7 +1473,7 @@ func (t *Task) moveTaskToDoneBuckets(s *xorm.Session, a web.Auth, views []*Proje
 			ProjectViewID: view.ID,
 			Position:      calculateDefaultPosition(t.Index, t.Position),
 		}
-		err = tp.Update(s, a)
+		err = updateTaskPosition(s, a, &tp)
 		if err != nil {
 			return err
 		}
@@ -1494,12 +1629,15 @@ func setTaskDatesFromCurrentDateRepeat(oldTask, newTask *Task) {
 	newTask.Done = false
 }
 
-// This helper function updates the reminders, doneAt, start and end dates of the *old* task
+// This helper function updates the reminders, doneAt, start, end and due dates of the *old* task
 // and saves the new values in the newTask object.
 // We make a few assumptions here:
 //  1. Everything in oldTask is the truth - we figure out if we update anything at all if oldTask.RepeatAfter has a value > 0
 //  2. Because of 1., this functions should not be used to update values other than Done in the same go
-func updateDone(oldTask *Task, newTask *Task) {
+func updateDone(oldTask *Task, newTask *Task) (updateDoneAt bool) {
+	// Track if the done status changed before repeat helpers modify it
+	doneStatusChanged := oldTask.Done != newTask.Done
+
 	if !oldTask.Done && newTask.Done {
 		switch oldTask.RepeatMode {
 		case TaskRepeatModeMonth:
@@ -1517,6 +1655,8 @@ func updateDone(oldTask *Task, newTask *Task) {
 	if oldTask.Done && !newTask.Done {
 		newTask.DoneAt = time.Time{}
 	}
+
+	return doneStatusChanged
 }
 
 // Set the absolute trigger dates for Reminders with relative period
@@ -1664,6 +1804,12 @@ func (t *Task) Delete(s *xorm.Session, a web.Auth) (err error) {
 	_, err = s.Where("task_id = ?", t.ID).Delete(&TaskComment{})
 	if err != nil {
 		return
+	}
+
+	// Delete all task unread statuses
+	_, err = s.Where("task_id = ?", t.ID).Delete(&TaskUnreadStatus{})
+	if err != nil {
+		return err
 	}
 
 	// Delete all relations

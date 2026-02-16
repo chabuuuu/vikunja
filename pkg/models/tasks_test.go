@@ -36,7 +36,7 @@ func TestTask_Create(t *testing.T) {
 		Email:    "user1@example.com",
 	}
 
-	// We only test creating a task here, the rights are all well tested in the web tests.
+	// We only test creating a task here, the permissions are all well tested in the web tests.
 
 	t.Run("normal", func(t *testing.T) {
 		db.LoadAndAssertFixtures(t)
@@ -261,6 +261,27 @@ func TestTask_Update(t *testing.T) {
 			"bucket_id": 3,
 		}, false)
 	})
+	t.Run("marking a task as done should fire exactly ONE task.updated event", func(t *testing.T) {
+		db.LoadAndAssertFixtures(t)
+		s := db.NewSession()
+		defer s.Close()
+
+		// Clear any events from previous operations
+		events.ClearDispatchedEvents()
+
+		task := &Task{
+			ID:   1,
+			Done: true,
+		}
+		err := task.Update(s, u)
+		require.NoError(t, err)
+		err = s.Commit()
+		require.NoError(t, err)
+
+		// Verify exactly ONE task.updated event was dispatched
+		count := events.CountDispatchedEvents("task.updated")
+		assert.Equal(t, 1, count, "Expected exactly 1 task.updated event, got %d", count)
+	})
 	t.Run("move task to another project should use the default bucket", func(t *testing.T) {
 		db.LoadAndAssertFixtures(t)
 		s := db.NewSession()
@@ -333,6 +354,40 @@ func TestTask_Update(t *testing.T) {
 			"task_id":   28,
 			"bucket_id": 1,
 		}, false)
+	})
+	t.Run("repeating tasks should set done_at when marked done", func(t *testing.T) {
+		db.LoadAndAssertFixtures(t)
+		s := db.NewSession()
+		defer s.Close()
+
+		// Get the task before updating to check done_at was empty
+		taskBefore := &Task{ID: 28}
+		err := taskBefore.ReadOne(s, u)
+		require.NoError(t, err)
+		assert.True(t, taskBefore.DoneAt.IsZero())
+		assert.False(t, taskBefore.Done)
+
+		// Mark the repeating task as done
+		task := &Task{
+			ID:          28,
+			Done:        true,
+			RepeatAfter: 3600,
+		}
+		err = task.Update(s, u)
+		require.NoError(t, err)
+		err = s.Commit()
+		require.NoError(t, err)
+
+		// Task should be reset to not done (because it repeats) but done_at should be set
+		assert.False(t, task.Done)
+		assert.False(t, task.DoneAt.IsZero(), "done_at should be set for repeating tasks when marked as done")
+
+		// Verify in database
+		updatedTask := &Task{ID: 28}
+		err = updatedTask.ReadOne(s, u)
+		require.NoError(t, err)
+		assert.False(t, updatedTask.Done)
+		assert.False(t, updatedTask.DoneAt.IsZero(), "done_at should be persisted in database for repeating tasks")
 	})
 	t.Run("moving a task between projects should give it a correct index", func(t *testing.T) {
 		db.LoadAndAssertFixtures(t)
@@ -450,6 +505,44 @@ func TestTask_Update(t *testing.T) {
 		err = s.Commit()
 		require.NoError(t, err)
 	})
+	t.Run("don't allow done_at change when passing fields", func(t *testing.T) {
+		db.LoadAndAssertFixtures(t)
+		s := db.NewSession()
+		defer s.Close()
+
+		task := &Task{
+			ID:     1,
+			DoneAt: time.Now(),
+		}
+
+		err := task.updateSingleTask(s, u, []string{"done_at"})
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), `Task column done_at is invalid`)
+		require.NoError(t, s.Commit())
+	})
+	t.Run("ignore done_at when updating unrelated values", func(t *testing.T) {
+		db.LoadAndAssertFixtures(t)
+		s := db.NewSession()
+		defer s.Close()
+
+		task := &Task{
+			ID:     1,
+			Title:  "updated",
+			DoneAt: time.Now(),
+		}
+
+		err := task.Update(s, u)
+
+		require.NoError(t, err)
+		require.NoError(t, s.Commit())
+
+		updatedTask := &Task{ID: 1}
+		err = updatedTask.ReadOne(s, u)
+		require.NoError(t, err)
+		assert.Equal(t, "updated", updatedTask.Title)
+		assert.True(t, updatedTask.DoneAt.IsZero())
+	})
 }
 
 func TestTask_Delete(t *testing.T) {
@@ -470,6 +563,20 @@ func TestTask_Delete(t *testing.T) {
 			"id": 1,
 		})
 	})
+}
+
+func TestUpdateTasksHelper(t *testing.T) {
+	db.LoadAndAssertFixtures(t)
+	s := db.NewSession()
+	defer s.Close()
+
+	u := &user.User{ID: 1}
+	updates := &Task{Title: "helper"}
+	updated, err := updateTasks(s, u, updates, []int64{10}, []string{"title"})
+	require.NoError(t, err)
+	require.Len(t, updated, 1)
+	assert.Equal(t, "helper", updated[0].Title)
+	assert.False(t, updated[0].Done)
 }
 
 func TestUpdateDone(t *testing.T) {

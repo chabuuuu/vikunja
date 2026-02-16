@@ -222,10 +222,10 @@ const ErrCodeWrongUsernameOrPassword = 1011
 
 // HTTPError holds the http error description
 func (err ErrWrongUsernameOrPassword) HTTPError() web.HTTPError {
-	return web.HTTPError{HTTPCode: http.StatusPreconditionFailed, Code: ErrCodeWrongUsernameOrPassword, Message: "Wrong username or password."}
+	return web.HTTPError{HTTPCode: http.StatusForbidden, Code: ErrCodeWrongUsernameOrPassword, Message: "Wrong username or password."}
 }
 
-// IsErrWrongUsernameOrPassword checks if an error is a IsErrEmailNotConfirmed.
+// IsErrWrongUsernameOrPassword checks if an error is a ErrWrongUsernameOrPassword.
 func IsErrWrongUsernameOrPassword(err error) bool {
 	_, ok := err.(ErrWrongUsernameOrPassword)
 	return ok
@@ -248,7 +248,7 @@ func (err ErrEmailNotConfirmed) HTTPError() web.HTTPError {
 	return web.HTTPError{HTTPCode: http.StatusPreconditionFailed, Code: ErrCodeEmailNotConfirmed, Message: "Please confirm your email address."}
 }
 
-// IsErrEmailNotConfirmed checks if an error is a IsErrEmailNotConfirmed.
+// IsErrEmailNotConfirmed checks if an error is a ErrEmailNotConfirmed.
 func IsErrEmailNotConfirmed(err error) bool {
 	_, ok := err.(ErrEmailNotConfirmed)
 	return ok
@@ -631,4 +631,86 @@ const ErrorCodeUsernameReserved = 1026
 // HTTPError holds the http error description
 func (err ErrUsernameReserved) HTTPError() web.HTTPError {
 	return web.HTTPError{HTTPCode: http.StatusBadRequest, Code: ErrorCodeUsernameReserved, Message: "This username is reserved and cannot be used."}
+}
+
+// ErrInvalidUserContext represents an error where the user context is invalid or missing
+type ErrInvalidUserContext struct {
+	Reason string
+}
+
+// IsErrInvalidUserContext checks if an error is a ErrInvalidUserContext.
+func IsErrInvalidUserContext(err error) bool {
+	_, ok := err.(ErrInvalidUserContext)
+	return ok
+}
+
+func (err ErrInvalidUserContext) Error() string {
+	return fmt.Sprintf("Invalid user context: %s", err.Reason)
+}
+
+// ErrorCodeInvalidUserContext holds the unique world-error code of this error
+const ErrorCodeInvalidUserContext = 1027
+
+// HTTPError holds the http error description
+func (err ErrInvalidUserContext) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusUnauthorized,
+		Code:     ErrorCodeInvalidUserContext,
+		Message:  "Invalid user context. Please make sure the passed token is valid and try again.",
+	}
+}
+
+// ErrInvalidDeletionToken represents an error where the deletion token is invalid
+type ErrInvalidDeletionToken struct {
+	Token string
+}
+
+// IsErrInvalidDeletionToken checks if an error is a ErrInvalidDeletionToken.
+func IsErrInvalidDeletionToken(err error) bool {
+	_, ok := err.(ErrInvalidDeletionToken)
+	return ok
+}
+
+func (err ErrInvalidDeletionToken) Error() string {
+	return fmt.Sprintf("Invalid deletion token [Token: %s]", err.Token)
+}
+
+// ErrorCodeInvalidDeletionToken holds the unique world-error code of this error
+const ErrorCodeInvalidDeletionToken = 1028
+
+// HTTPError holds the http error description
+func (err ErrInvalidDeletionToken) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrorCodeInvalidDeletionToken,
+		Message:  "Invalid deletion token provided.",
+	}
+}
+
+// ErrTokenUserMismatch represents an error where the token doesn't belong to the user
+type ErrTokenUserMismatch struct {
+	TokenUserID int64
+	UserID      int64
+}
+
+// IsErrTokenUserMismatch checks if an error is a ErrTokenUserMismatch.
+func IsErrTokenUserMismatch(err error) bool {
+	_, ok := err.(ErrTokenUserMismatch)
+	return ok
+}
+
+func (err ErrTokenUserMismatch) Error() string {
+	return fmt.Sprintf("Token user mismatch [Token User ID: %d, User ID: %d]", err.TokenUserID, err.UserID)
+}
+
+// ErrorCodeTokenUserMismatch holds the unique world-error code of this error
+const ErrorCodeTokenUserMismatch = 1029
+
+// HTTPError holds the http error description
+func (err ErrTokenUserMismatch) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusForbidden,
+		Code:     ErrorCodeTokenUserMismatch,
+		Message:  "This deletion token does not belong to your account.",
+	}
 }

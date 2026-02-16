@@ -7,22 +7,17 @@
 			v-if="authenticateWithPassword"
 			class="box"
 		>
-			<p class="pb-2">
+			<p class="pbe-2">
 				{{ $t('sharing.passwordRequired') }}
 			</p>
-			<div class="field">
-				<div class="control">
-					<input
-						id="linkSharePassword"
-						v-model="password"
-						v-focus
-						type="password"
-						class="input"
-						:placeholder="$t('user.auth.passwordPlaceholder')"
-						@keyup.enter.prevent="authenticate()"
-					>
-				</div>
-			</div>
+			<FormField
+				id="linkSharePassword"
+				v-model="password"
+				v-focus
+				type="password"
+				:placeholder="$t('user.auth.passwordPlaceholder')"
+				@keyup.enter.prevent="authenticate()"
+			/>
 
 			<XButton
 				:loading="loading"
@@ -34,7 +29,7 @@
 			<Message
 				v-if="errorMessage !== ''"
 				variant="danger"
-				class="mt-4"
+				class="mbs-4"
 			>
 				{{ errorMessage }}
 			</Message>
@@ -49,6 +44,7 @@ import {useI18n} from 'vue-i18n'
 import {useTitle} from '@vueuse/core'
 
 import Message from '@/components/misc/Message.vue'
+import FormField from '@/components/input/FormField.vue'
 import {LINK_SHARE_HASH_PREFIX} from '@/constants/linkShareHash'
 
 import {useBaseStore} from '@/stores/base'
@@ -72,12 +68,13 @@ function useAuth() {
 	const password = ref('')
 
 	const authLinkShare = computed(() => authStore.authLinkShare)
-	
+
 	function redirectToProject(projectId: IProject['id']) {
 		const hash = LINK_SHARE_HASH_PREFIX + route.params.share
-		
-		const viewId = new URLSearchParams(window.location.search).get('view') || null
-		
+
+		const viewId =
+			new URLSearchParams(window.location.search).get('view') || null
+
 		const last = getLastVisitedRoute()
 		if (last) {
 			return router.push({
@@ -85,8 +82,8 @@ function useAuth() {
 				hash,
 			})
 		}
-		
-		if(viewId) {
+
+		if (viewId) {
 			return router.push({
 				name: 'project.view',
 				params: {
@@ -135,6 +132,23 @@ function useAuth() {
 				authenticateWithPassword.value = true
 				return
 			}
+
+			// Handle generic 403 errors that might occur after initial auth
+			if (e?.response?.status === 403 && !e?.response?.data?.code) {
+				errorMessage.value = t('sharing.accessDenied')
+				authenticateWithPassword.value = false
+				return
+			}
+			
+			// Handle network/server errors
+			if (e?.response?.status >= 500 || !e?.response) {
+				errorMessage.value = t('sharing.serverError')
+				authenticateWithPassword.value = false
+				return
+			}
+			
+			// Log unexpected errors for debugging
+			console.error('Link share authentication error:', e)
 
 			// TODO: Put this logic in a global errorMessage handler method which checks all auth codes
 			let err = t('sharing.error')

@@ -5,7 +5,7 @@
 			:disabled="disabled || undefined"
 			@click.stop="toggleDatePopup"
 		>
-			{{ date === null ? chooseDateLabel : formatDateShort(date) }}
+			{{ date === null ? chooseDateLabel : formatDisplayDate(date) }}
 		</SimpleButton>
 
 		<CustomTransition name="fade">
@@ -39,7 +39,7 @@ import CustomTransition from '@/components/misc/CustomTransition.vue'
 import DatepickerInline from '@/components/input/DatepickerInline.vue'
 import SimpleButton from '@/components/input/SimpleButton.vue'
 
-import {formatDateShort} from '@/helpers/time/formatDate'
+import {formatDisplayDate} from '@/helpers/time/formatDate'
 import {closeWhenClickedOutside} from '@/helpers/closeWhenClickedOutside'
 import {createDateFromString} from '@/helpers/time/createDateFromString'
 import {useI18n} from 'vue-i18n'
@@ -62,7 +62,7 @@ const emit = defineEmits<{
 	'closeOnChange': [value: boolean],
 }>()
 
-const date = ref<Date | null>()
+const date = ref<Date | null>(null)
 const show = ref(false)
 const changed = ref(false)
 
@@ -86,7 +86,7 @@ function setDateValue(dateString: string | Date | null) {
 
 function updateData() {
 	changed.value = true
-	emit('update:modelValue', date.value)
+	emit('update:modelValue', date.value ?? null)
 }
 
 function toggleDatePopup() {
@@ -99,7 +99,7 @@ function toggleDatePopup() {
 
 const datepickerPopup = ref<HTMLElement | null>(null)
 function hideDatePopup(e: MouseEvent) {
-	if (show.value) {
+	if (show.value && datepickerPopup.value) {
 		closeWhenClickedOutside(e, datepickerPopup.value, close)
 	}
 }
@@ -128,19 +128,19 @@ function close() {
 .datepicker-popup {
 	position: absolute;
 	z-index: 99;
-	width: 320px;
+	inline-size: 320px;
 	background: var(--white);
 	border-radius: $radius;
 	box-shadow: $shadow;
 
 	@media screen and (max-width: ($tablet)) {
-		width: calc(100vw - 5rem);
+		inline-size: calc(100vw - 5rem);
 	}
 }
 
 .datepicker__close-button {
 	margin: 1rem;
-	width: calc(100% - 2rem);
+	inline-size: calc(100% - 2rem);
 }
 
 :deep(.flatpickr-calendar) {

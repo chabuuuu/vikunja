@@ -1,7 +1,8 @@
 <template>
 	<aside
-		:class="{'is-active': baseStore.menuActive}"
+		:class="{'is-active': baseStore.menuActive, 'is-resizing': isResizing}"
 		class="menu-container"
+		:style="{'--sidebar-width': sidebarWidth}"
 	>
 		<nav class="menu top-menu">
 			<RouterLink
@@ -83,7 +84,7 @@
 				class="menu"
 			>
 				<ProjectsNavigation
-					:model-value="favoriteProjects" 
+					:model-value="favoriteProjects"
 					:can-edit-order="false"
 					:can-collapse="false"
 				/>
@@ -110,8 +111,15 @@
 		</template>
 
 		<PoweredByLink
-			class="mt-auto"
+			class="mbs-auto"
 			utm-medium="navigation"
+		/>
+
+		<div
+			v-if="!isMobile"
+			class="resize-handle"
+			@mousedown="startResize"
+			@touchstart="startResize"
 		/>
 	</aside>
 </template>
@@ -126,22 +134,27 @@ import Loading from '@/components/misc/Loading.vue'
 import {useBaseStore} from '@/stores/base'
 import {useProjectStore} from '@/stores/projects'
 import ProjectsNavigation from '@/components/home/ProjectsNavigation.vue'
+import type {IProject} from '@/modelTypes/IProject'
+import {useSidebarResize} from '@/composables/useSidebarResize'
 
 const baseStore = useBaseStore()
 const projectStore = useProjectStore()
 
-const projects = computed(() => projectStore.notArchivedRootProjects)
-const favoriteProjects = computed(() => projectStore.favoriteProjects)
-const savedFilterProjects = computed(() => projectStore.savedFilterProjects)
+const {sidebarWidth, isResizing, startResize, isMobile} = useSidebarResize()
+
+// Cast readonly arrays to mutable type - the arrays are not actually mutated by the component
+const projects = computed(() => projectStore.notArchivedRootProjects as IProject[])
+const favoriteProjects = computed(() => projectStore.favoriteProjects as IProject[])
+const savedFilterProjects = computed(() => projectStore.savedFilterProjects as IProject[])
 </script>
 
 <style lang="scss" scoped>
 .logo {
 	display: block;
 
-	padding-left: 1rem;
-	margin-right: 1rem;
-	margin-bottom: 1rem;
+	padding-inline-start: 1rem;
+	margin-inline-end: 1rem;
+	margin-block-end: 1rem;
 
 	@media screen and (min-width: $tablet) {
 		display: none;
@@ -149,6 +162,8 @@ const savedFilterProjects = computed(() => projectStore.savedFilterProjects)
 }
 
 .menu-container {
+	--sidebar-width: #{$navbar-width};
+
 	display: flex;
 	flex-direction: column;
 	background: var(--site-background);
@@ -156,22 +171,47 @@ const savedFilterProjects = computed(() => projectStore.savedFilterProjects)
 	padding: 1rem 0;
 	transition: transform $transition-duration ease-in;
 	position: fixed;
-	top: $navbar-height;
-	bottom: 0;
-	left: 0;
+	inset-block-start: $navbar-height;
+	inset-block-end: 0;
+	inset-inline-start: 0;
 	transform: translateX(-100%);
-	width: $navbar-width;
+	inline-size: var(--sidebar-width);
 	overflow-y: auto;
 
+	[dir="rtl"] & {
+		transform: translateX(100%);
+	}
+
 	@media screen and (max-width: $tablet) {
-		top: 0;
-		width: 70vw;
+		inset-block-start: 0;
+		inline-size: 70vw;
 		z-index: 20;
 	}
 
 	&.is-active {
 		transform: translateX(0);
 		transition: transform $transition-duration ease-out;
+	}
+
+	&.is-resizing {
+		transition: none;
+	}
+}
+
+.resize-handle {
+	position: absolute;
+	inset-block-start: 0;
+	inset-block-end: 0;
+	inset-inline-end: 0;
+	inline-size: 4px;
+	cursor: ew-resize;
+	background: transparent;
+	transition: background-color $transition-duration ease;
+	touch-action: none;
+
+	&:hover,
+	&:active {
+		background-color: var(--primary);
 	}
 }
 
@@ -183,16 +223,16 @@ const savedFilterProjects = computed(() => projectStore.savedFilterProjects)
 
 	.list-menu-link,
 	li > a {
-		padding-left: 2rem;
+		padding-inline-start: 2rem;
 		display: inline-block;
 
 		.icon {
-			padding-bottom: .25rem;
+			padding-block-end: .25rem;
 		}
 	}
 }
 
 .menu + .menu {
-	padding-top: math.div($navbar-padding, 2);
+	padding-block-start: math.div($navbar-padding, 2);
 }
 </style>

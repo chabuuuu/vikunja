@@ -56,7 +56,7 @@
 								scope="global"
 							>
 								<span v-tooltip="formatDateLong(a.created)">
-									{{ formatDateSince(a.created) }}
+									{{ formatDisplayDate(a.created) }}
 								</span>
 								<User
 									:avatar-size="24"
@@ -113,7 +113,7 @@
 		<XButton
 			v-if="editEnabled"
 			:disabled="loading"
-			class="mb-4"
+			class="mbe-4"
 			icon="cloud-upload-alt"
 			variant="secondary"
 			:shadow="false"
@@ -126,7 +126,7 @@
 		<Teleport to="body">
 			<div
 				v-if="editEnabled"
-				:class="{hidden: !isOverDropZone}"
+				:class="{hidden: !showDropzone}"
 				class="dropzone"
 			>
 				<div class="drop-hint">
@@ -172,7 +172,7 @@
 </template>
 
 <script setup lang="ts">
-import {ref, shallowReactive, computed} from 'vue'
+import {ref, shallowReactive, computed, watch} from 'vue'
 import {useDropZone} from '@vueuse/core'
 
 import User from '@/components/misc/User.vue'
@@ -185,7 +185,7 @@ import type {IAttachment} from '@/modelTypes/IAttachment'
 import type {ITask} from '@/modelTypes/ITask'
 
 import {useAttachmentStore} from '@/stores/attachments'
-import {formatDateSince, formatDateLong} from '@/helpers/time/formatDate'
+import {formatDisplayDate, formatDateLong} from '@/helpers/time/formatDate'
 import {uploadFiles, generateAttachmentUrl} from '@/helpers/attachments'
 import {getHumanSize} from '@/helpers/getHumanSize'
 import {useCopyToClipboard} from '@/composables/useCopyToClipboard'
@@ -205,6 +205,28 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
 	'taskChanged': [ITask],
 }>()
+
+const EDITOR_SELECTOR = '.tiptap, .tiptap__editor, [contenteditable]'
+
+function eventTargetsEditor(event: Event | null | undefined): boolean {
+	if (!event) {
+		return false
+	}
+
+	const target = event.target
+	if (target instanceof HTMLElement && target.closest(EDITOR_SELECTOR)) {
+		return true
+	}
+
+	if (typeof event.composedPath === 'function') {
+		return event.composedPath().some(element =>
+			element instanceof HTMLElement && element.matches(EDITOR_SELECTOR),
+		)
+	}
+
+	return false
+}
+
 const taskStore = useTaskStore()
 const {t} = useI18n({useScope: 'global'})
 
@@ -215,13 +237,85 @@ const attachments = computed(() => attachmentStore.attachments)
 
 const loading = computed(() => attachmentService.loading || taskStore.isLoading)
 
-function onDrop(files: File[] | null) {
-	if (files && files.length !== 0) {
-		uploadFilesToTask(files)
-	}
+const isDraggingFiles = ref(false)
+const isDragOverEditor = ref(false)
+
+function resetDragState() {
+	isDraggingFiles.value = false
+	isDragOverEditor.value = false
 }
 
-const {isOverDropZone} = useDropZone(document, onDrop)
+/**
+ * Check if a drag event contains actual files (not text being dragged).
+ * This prevents the file upload overlay from appearing when dragging text
+ * from within the editor to outside it.
+ */
+function eventContainsFiles(event: Event | null | undefined): boolean {
+	if (!event || !(event instanceof DragEvent)) {
+		return false
+	}
+	return event.dataTransfer?.types.includes('Files') ?? false
+}
+
+const {isOverDropZone} = useDropZone(document, {
+	onEnter(files, event) {
+		if (!props.editEnabled) {
+			return
+		}
+
+		// Only show dropzone if actual files are being dragged, not text
+		if (!eventContainsFiles(event)) {
+			return
+		}
+
+		isDraggingFiles.value = true
+		isDragOverEditor.value = eventTargetsEditor(event)
+	},
+	onOver(files, event) {
+		if (!props.editEnabled) {
+			return
+		}
+
+		isDragOverEditor.value = eventTargetsEditor(event)
+	},
+	onLeave(files, event) {
+		if (!props.editEnabled) {
+			return
+		}
+
+		if (!isOverDropZone.value) {
+			resetDragState()
+			return
+		}
+
+		isDragOverEditor.value = eventTargetsEditor(event)
+	},
+	onDrop(files, event) {
+		if (!props.editEnabled) {
+			return
+		}
+
+		const dropOverEditor = eventTargetsEditor(event)
+		resetDragState()
+
+		// Ignore drops over editor - let TipTap handle them
+		if (dropOverEditor || !files || files.length === 0) {
+			return
+		}
+
+		uploadFilesToTask(files)
+	},
+})
+
+const showDropzone = computed(() =>
+	props.editEnabled && isDraggingFiles.value && !isDragOverEditor.value,
+)
+
+watch(() => props.editEnabled, enabled => {
+	if (!enabled) {
+		resetDragState()
+	}
+})
 
 function downloadAttachment(attachment: IAttachment) {
 	attachmentService.download(attachment)
@@ -239,8 +333,12 @@ function uploadNewAttachment() {
 	uploadFilesToTask(files)
 }
 
-function uploadFilesToTask(files: File[] | FileList) {
-	uploadFiles(attachmentService, props.task.id, files)
+async function uploadFilesToTask(files: File[] | FileList) {
+	try {
+		await uploadFiles(attachmentService, props.task.id, files)
+	} catch (e) {
+		error(e)
+	}
 }
 
 const attachmentToDelete = ref<IAttachment | null>(null)
@@ -289,26 +387,26 @@ async function setCoverImage(attachment: IAttachment | null) {
 
 <style lang="scss" scoped>
 .attachments {
-	input[type=file] {
+	input[type="file"] {
 		display: none;
 	}
 
 	@media screen and (max-width: $tablet) {
 		.button {
-			width: 100%;
+			inline-size: 100%;
 		}
 	}
 }
 
 .files {
-	margin-bottom: 1rem;
+	margin-block-end: 1rem;
 }
 
 .attachment {
 	display: grid;
 	grid-template-columns: 9rem 1fr;
 	align-items: center;
-	width: 100%;
+	inline-size: 100%;
 	
 	padding: .5rem;
 	
@@ -327,9 +425,11 @@ async function setCoverImage(attachment: IAttachment | null) {
 	display: flex;
 	align-items: center;
 	font-weight: bold;
-	height: 2rem;
+	min-block-size: 2rem;
 	color: var(--text);
-	text-align: left;
+	text-align: start;
+	word-break: break-all;
+	min-inline-size: 0;
 }
 
 .info {
@@ -339,7 +439,7 @@ async function setCoverImage(attachment: IAttachment | null) {
 	flex-direction: column;
 
 	p {
-		margin-bottom: 0;
+		margin-block-end: 0;
 		display: flex;
 
 		> span,
@@ -352,10 +452,10 @@ async function setCoverImage(attachment: IAttachment | null) {
 .dropzone {
 	position: fixed;
 	background: hsla(var(--grey-100-hsl), 0.8);
-	top: 0;
-	left: 0;
-	bottom: 0;
-	right: 0;
+	inset-block-start: 0;
+	inset-inline-start: 0;
+	inset-block-end: 0;
+	inset-inline-end: 0;
 	z-index: 4001; // modal z-index is 4000
 	text-align: center;
 
@@ -366,14 +466,14 @@ async function setCoverImage(attachment: IAttachment | null) {
 
 .drop-hint {
 	position: absolute;
-	bottom: 0;
-	left: 0;
-	right: 0;
+	inset-block-end: 0;
+	inset-inline-start: 0;
+	inset-inline-end: 0;
 
 	.icon {
-		width: 100%;
+		inline-size: 100%;
 		font-size: 5rem;
-		height: auto;
+		block-size: auto;
 		text-shadow: var(--shadow-md);
 		animation: bounce 2s infinite;
 
@@ -389,8 +489,8 @@ async function setCoverImage(attachment: IAttachment | null) {
 		background: var(--primary);
 		padding: 1rem;
 		color: $white; // Should always be white because of the background, regardless of the theme
-		width: 100%;
-		max-width: 300px;
+		inline-size: 100%;
+		max-inline-size: 300px;
 	}
 }
 
@@ -398,6 +498,7 @@ async function setCoverImage(attachment: IAttachment | null) {
 	display: flex;
 	flex-flow: column wrap;
 	align-self: start;
+	min-inline-size: 0;
 }
 
 .attachment-info-meta {
@@ -435,11 +536,11 @@ async function setCoverImage(attachment: IAttachment | null) {
 }
 
 @keyframes bounce {
-	from,
+	0%,
 	20%,
 	53%,
 	80%,
-	to {
+	100% {
 		animation-timing-function: cubic-bezier(0.215, 0.61, 0.355, 1);
 		transform: translate3d(0, 0, 0);
 	}
@@ -461,18 +562,18 @@ async function setCoverImage(attachment: IAttachment | null) {
 }
 
 .preview-column {
-	max-width: 8rem;
-	height: 5.2rem;
+	max-inline-size: 8rem;
+	block-size: 5.2rem;
 }
 
 .attachment-preview {
-	height: 100%;
+	block-size: 100%;
 }
 
 .is-task-cover {
 	background: var(--primary);
 	color: var(--white);
-	margin-left: .25rem;
+	margin-inline-start: .25rem;
 	padding: .25rem .35rem;
 	border-radius: 4px;
 	font-size: .75rem;

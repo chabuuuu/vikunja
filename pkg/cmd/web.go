@@ -18,7 +18,10 @@ package cmd
 
 import (
 	"context"
+	"crypto/tls"
+	"errors"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
@@ -30,11 +33,11 @@ import (
 	"code.vikunja.io/api/pkg/cron"
 	"code.vikunja.io/api/pkg/initialize"
 	"code.vikunja.io/api/pkg/log"
+	"code.vikunja.io/api/pkg/plugins"
 	"code.vikunja.io/api/pkg/routes"
 	"code.vikunja.io/api/pkg/utils"
 	"code.vikunja.io/api/pkg/version"
 
-	"github.com/labstack/echo/v4"
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/acme/autocert"
 )
@@ -43,12 +46,12 @@ func init() {
 	rootCmd.AddCommand(webCmd)
 }
 
-func setupUnixSocket(e *echo.Echo) error {
+func setupUnixSocket() (net.Listener, error) {
 	path := config.ServiceUnixSocket.GetString()
 
 	// Remove old unix socket that may have remained after a crash
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		return err
+		return nil, err
 	}
 
 	if config.ServiceUnixSocketMode.Get() != nil {
@@ -59,16 +62,11 @@ func setupUnixSocket(e *echo.Echo) error {
 		defer utils.Umask(oldmask)
 	}
 
-	l, err := net.Listen("unix", path)
-	if err != nil {
-		return err
-	}
-
-	e.Listener = l
-	return nil
+	cfg := net.ListenConfig{}
+	return cfg.Listen(context.Background(), "unix", path)
 }
 
-func setupAutoTLS(e *echo.Echo) {
+func setupAutoTLS(server *http.Server) {
 	if config.ServiceUnixSocket.GetString() != "" {
 		log.Warning("Auto tls is enabled but listening on a unix socket is enabled as well. The latter will be ignored.")
 	}
@@ -93,7 +91,8 @@ func setupAutoTLS(e *echo.Echo) {
 	if config.AutoTLSEmail.GetString() == "" {
 		log.Fatalf("You must provide an email address to use autotls.")
 	}
-	e.AutoTLSManager = autocert.Manager{
+
+	manager := autocert.Manager{
 		Prompt: autocert.AcceptTOS,
 		Cache: autocert.DirCache(filepath.Join(
 			config.FilesBasePath.GetString(),
@@ -104,14 +103,34 @@ func setupAutoTLS(e *echo.Echo) {
 		Email:       config.AutoTLSEmail.GetString(),
 	}
 
+	server.TLSConfig = &tls.Config{
+		GetCertificate: manager.GetCertificate,
+		NextProtos:     []string{"h2", "http/1.1", "acme-tls/1"},
+		MinVersion:     tls.VersionTLS12,
+	}
+
 	if config.ServiceInterface.GetString() != ":443" {
 		log.Warningf("Vikunja's interface is set to %s, with tls it is recommended to set this to :443", config.ServiceInterface.GetString())
 	}
 
-	err = e.StartAutoTLS(config.ServiceInterface.GetString())
-	if err != nil {
-		e.Logger.Info("shutting down...")
+	// Start HTTP server for ACME challenges
+	go func() {
+		httpServer := &http.Server{
+			Addr:              ":http",
+			Handler:           manager.HTTPHandler(nil),
+			ReadHeaderTimeout: 10 * time.Second,
+		}
+		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Errorf("HTTP server for ACME failed: %v", err)
+		}
+	}()
+
+	log.Infof("HTTPS server listening on %s", config.ServiceInterface.GetString())
+	err = server.ListenAndServeTLS("", "")
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Errorf("Server error: %v", err)
 	}
+	log.Info("shutting down...")
 }
 
 var webCmd = &cobra.Command{
@@ -128,24 +147,40 @@ var webCmd = &cobra.Command{
 		// Start the webserver
 		e := routes.NewEcho()
 		routes.RegisterRoutes(e)
+
+		// Create HTTP server with Echo as handler
+		server := &http.Server{
+			Addr:              config.ServiceInterface.GetString(),
+			Handler:           e,
+			ReadHeaderTimeout: 10 * time.Second,
+		}
+
 		// Start server
 		go func() {
 			if config.AutoTLSEnabled.GetBool() {
-				setupAutoTLS(e)
+				setupAutoTLS(server)
 				return
 			}
 
+			var err error
 			// Listen unix socket if needed (ServiceInterface will be ignored)
 			if config.ServiceUnixSocket.GetString() != "" {
-				if err := setupUnixSocket(e); err != nil {
-					e.Logger.Fatal(err)
+				var listener net.Listener
+				listener, err = setupUnixSocket()
+				if err != nil {
+					log.Fatalf("Failed to setup unix socket: %v", err)
 				}
+				log.Infof("HTTP server listening on unix socket %s", config.ServiceUnixSocket.GetString())
+				err = server.Serve(listener)
+			} else {
+				log.Infof("HTTP server listening on %s", config.ServiceInterface.GetString())
+				err = server.ListenAndServe()
 			}
 
-			err := e.Start(config.ServiceInterface.GetString())
-			if err != nil {
-				e.Logger.Info("shutting down...")
+			if err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Errorf("Server error: %v", err)
 			}
+			log.Info("shutting down...")
 		}()
 
 		// Wait for interrupt signal to gracefully shut down the server with
@@ -156,9 +191,10 @@ var webCmd = &cobra.Command{
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		log.Infof("Shutting down...")
-		if err := e.Shutdown(ctx); err != nil {
-			e.Logger.Fatal(err)
+		if err := server.Shutdown(ctx); err != nil {
+			log.Fatalf("Server shutdown failed: %v", err)
 		}
 		cron.Stop()
+		plugins.Shutdown()
 	},
 }

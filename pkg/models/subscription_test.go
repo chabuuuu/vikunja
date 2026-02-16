@@ -136,7 +136,7 @@ func TestSubscription_Create(t *testing.T) {
 		assert.True(t, IsErrTaskDoesNotExist(err))
 		assert.False(t, can)
 	})
-	t.Run("no rights to see project", func(t *testing.T) {
+	t.Run("no permissions to see project", func(t *testing.T) {
 		db.LoadAndAssertFixtures(t)
 		s := db.NewSession()
 		defer s.Close()
@@ -151,7 +151,7 @@ func TestSubscription_Create(t *testing.T) {
 		require.NoError(t, err)
 		assert.False(t, can)
 	})
-	t.Run("no rights to see task", func(t *testing.T) {
+	t.Run("no permissions to see task", func(t *testing.T) {
 		db.LoadAndAssertFixtures(t)
 		s := db.NewSession()
 		defer s.Close()
@@ -340,4 +340,26 @@ func TestSubscriptionGet(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, int64(9), sub.ID)
 	})
+}
+
+func TestSubscription_NoCrossUserProjectInheritance(t *testing.T) {
+	db.LoadAndAssertFixtures(t)
+	s := db.NewSession()
+	defer s.Close()
+
+	user1 := &user.User{ID: 1}
+	user2 := &user.User{ID: 2}
+
+	sb := &Subscription{
+		Entity:   "project",
+		EntityID: 3,
+	}
+	can, err := sb.CanCreate(s, user1)
+	require.NoError(t, err)
+	require.True(t, can)
+	require.NoError(t, sb.Create(s, user1))
+
+	sub, err := GetSubscriptionForUser(s, SubscriptionEntityTask, 32, user2)
+	require.NoError(t, err)
+	assert.Nil(t, sub)
 }

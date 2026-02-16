@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useNow } from '@vueuse/core'
 import { useAuthStore } from '@/stores/auth'
+import { useColorScheme } from '@/composables/useColorScheme'
 
 import LogoFull from '@/assets/logo-full.svg?component'
 import LogoFullPride from '@/assets/logo-full-pride.svg?component'
@@ -12,12 +13,24 @@ const now = useNow({
 })
 
 const authStore = useAuthStore()
-const Logo = computed(() => window.ALLOW_ICON_CHANGES 
-	&& authStore.settings.frontendSettings.allowIconChanges 
-	&& now.value.getMonth() === 5 
-	? LogoFullPride 
+const { isDark } = useColorScheme()
+
+const Logo = computed(() => window.ALLOW_ICON_CHANGES
+	&& authStore.settings.frontendSettings.allowIconChanges
+	&& now.value.getMonth() === 5
+	? LogoFullPride
 	: LogoFull)
-const CustomLogo = computed(() => window.CUSTOM_LOGO_URL)
+
+const CustomLogo = computed(() => {
+	const lightLogo = window.CUSTOM_LOGO_URL
+	const darkLogo = window.CUSTOM_LOGO_URL_DARK
+
+	if (!lightLogo && !darkLogo) return ''
+	if (!darkLogo) return lightLogo
+	if (!lightLogo) return darkLogo
+
+	return isDark.value ? darkLogo : lightLogo
+})
 </script>
 
 <template>
@@ -39,7 +52,7 @@ const CustomLogo = computed(() => window.CUSTOM_LOGO_URL)
 <style lang="scss" scoped>
 .logo {
 	color: var(--logo-text-color);
-	max-width: 168px;
-	max-height: 48px;
+	max-inline-size: 168px;
+	max-block-size: 48px;
 }
 </style>

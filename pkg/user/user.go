@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/mail"
 	"reflect"
 	"strconv"
 	"time"
@@ -32,7 +33,7 @@ import (
 	"code.vikunja.io/api/pkg/web"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 	"golang.org/x/crypto/bcrypt"
 	"xorm.io/builder"
 	"xorm.io/xorm"
@@ -105,7 +106,8 @@ type User struct {
 	DeletionScheduledAt      time.Time `xorm:"datetime null" json:"-"`
 	DeletionLastReminderSent time.Time `xorm:"datetime null" json:"-"`
 
-	FrontendSettings interface{} `xorm:"json null" json:"-"`
+	FrontendSettings   interface{}    `xorm:"json null" json:"-"`
+	ExtraSettingsLinks map[string]any `xorm:"json null" json:"-"`
 
 	ExportFileID int64 `xorm:"bigint null" json:"-"`
 
@@ -174,7 +176,12 @@ func (u *User) GetName() string {
 
 // GetNameAndFromEmail returns the name and email address for a user. Useful to use in notifications.
 func (u *User) GetNameAndFromEmail() string {
-	return u.GetName() + " via Vikunja <" + config.MailerFromEmail.GetString() + ">"
+	// Use RFC 5322 compliant address formatting to properly handle special characters like @ in names
+	addr := mail.Address{
+		Name:    u.GetName() + " via Vikunja",
+		Address: config.MailerFromEmail.GetString(),
+	}
+	return addr.String()
 }
 
 func (u *User) GetFailedTOTPAttemptsKey() string {
@@ -418,7 +425,7 @@ func CheckUserPassword(user *User, password string) error {
 }
 
 // GetCurrentUserFromDB gets a user from jwt claims and returns the full user from the db.
-func GetCurrentUserFromDB(s *xorm.Session, c echo.Context) (user *User, err error) {
+func GetCurrentUserFromDB(s *xorm.Session, c *echo.Context) (user *User, err error) {
 	u, err := GetCurrentUser(c)
 	if err != nil {
 		return nil, err
@@ -428,8 +435,22 @@ func GetCurrentUserFromDB(s *xorm.Session, c echo.Context) (user *User, err erro
 }
 
 // GetCurrentUser returns the current user based on its jwt token
-func GetCurrentUser(c echo.Context) (user *User, err error) {
-	jwtinf := c.Get("user").(*jwt.Token)
+func GetCurrentUser(c *echo.Context) (user *User, err error) {
+	if apiUser, ok := c.Get("api_user").(*User); ok {
+		return apiUser, nil
+	}
+
+	jwtinf, is := c.Get("user").(*jwt.Token)
+	if jwtinf == nil {
+		log.Error("No user found in context")
+		return nil, ErrInvalidUserContext{Reason: "no user found in context"}
+	}
+
+	if !is {
+		log.Errorf("User in context is not a JWT token, got type: %T", jwtinf)
+		return nil, ErrInvalidUserContext{Reason: "user in context is not a JWT token"}
+	}
+
 	claims := jwtinf.Claims.(jwt.MapClaims)
 	return GetUserFromClaims(claims)
 }
@@ -440,24 +461,14 @@ func GetUserFromClaims(claims jwt.MapClaims) (user *User, err error) {
 	if err != nil {
 		return nil, err
 	}
-	email, err := getClaimAsString(claims, "email")
-	if err != nil {
-		return nil, err
-	}
 	username, err := getClaimAsString(claims, "username")
-	if err != nil {
-		return nil, err
-	}
-	name, err := getClaimAsString(claims, "name")
 	if err != nil {
 		return nil, err
 	}
 
 	return &User{
 		ID:       userID,
-		Email:    email,
 		Username: username,
-		Name:     name,
 	}, nil
 }
 
@@ -581,7 +592,7 @@ func UpdateUser(s *xorm.Session, user *User, forceOverride bool) (updatedUser *U
 			"email",
 			"avatar_provider",
 			"avatar_file_id",
-			"is_active",
+			"status",
 			"name",
 			"email_reminders_enabled",
 			"discoverable_by_name",
@@ -593,6 +604,7 @@ func UpdateUser(s *xorm.Session, user *User, forceOverride bool) (updatedUser *U
 			"timezone",
 			"overdue_tasks_reminders_time",
 			"frontend_settings",
+			"extra_settings_links",
 		).
 		Update(user)
 	if err != nil {

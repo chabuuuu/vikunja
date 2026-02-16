@@ -1,5 +1,5 @@
-# syntax=docker/dockerfile:1@sha256:9857836c9ee4268391bb5b09f9f157f3c91bb15821bb77969642813b0d00518d
-FROM --platform=$BUILDPLATFORM node:22.17.0-alpine@sha256:10962e8568729b0cfd506170c5a2d1918a2c10ac08c0e6900180b4bac061adc9 AS frontendbuilder
+# syntax=docker/dockerfile:1@sha256:b6afd42430b15f2d2a4c5a02b919e98a525b785b1aaff16747d2f623364e39b6
+FROM --platform=$BUILDPLATFORM node:24.13.0-alpine@sha256:931d7d57f8c1fd0e2179dbff7cc7da4c9dd100998bc2b32afc85142d8efbc213 AS frontendbuilder
 
 WORKDIR /build
 
@@ -9,15 +9,22 @@ ENV CYPRESS_INSTALL_BINARY=0
 
 # COPY frontend/pnpm-lock.yaml frontend/package.json frontend/.npmrc ./ 
 # COPY frontend/patches ./patches
-RUN npm install -g corepack && corepack enable && \
-    pnpm fetch # installs into cache only
 
+# --- RESOLVED CONFLICT SECTION START ---
+RUN npm install -g corepack && corepack enable
+
+# Copy toàn bộ source code frontend vào trước
 COPY frontend/ ./
-# RUN pnpm install --frozen-lockfile --offline
-RUN pnpm install --frozen-lockfile
-RUN	pnpm run build
 
-FROM --platform=$BUILDPLATFORM ghcr.io/techknowlogick/xgo:go-1.23.x@sha256:55a8e62ff9e468ff6ca6e9ecb846f853273161fe90b688f94c67b34f88d658b7 AS apibuilder
+# Cài đặt dependencies
+RUN pnpm install --frozen-lockfile
+
+# Build Frontend với logic mới (tạo version.json) của Upstream
+ARG RELEASE_VERSION=dev
+RUN echo "{\"VERSION\": \"${RELEASE_VERSION/-g/-}\"}" > src/version.json && pnpm run build
+# --- RESOLVED CONFLICT SECTION END ---
+
+FROM --platform=$BUILDPLATFORM ghcr.io/techknowlogick/xgo:go-1.25.x@sha256:11ac5e6cb8767caea0c62c420e053cb69554638ec255f9bbef8ed411e70c9eec AS apibuilder
 
 RUN go install github.com/magefile/mage@latest && \
     mv /go/bin/mage /usr/local/go/bin
@@ -30,7 +37,7 @@ ARG TARGETOS TARGETARCH TARGETVARIANT RELEASE_VERSION
 ENV RELEASE_VERSION=$RELEASE_VERSION
 
 RUN export PATH=$PATH:$GOPATH/bin && \
-	mage build:clean && \
+    mage build:clean && \
     mage release:xgo "${TARGETOS}/${TARGETARCH}/${TARGETVARIANT}"
 
 #  ┬─┐┬ ┐┌┐┐┌┐┐┬─┐┬─┐

@@ -27,14 +27,14 @@ onMounted(async () => {
 	}
 
 	const taskService = new TaskService()
-	const tasks = await taskService.getAll({}, {per_page: 1})
+	const tasks = await taskService.getAll(undefined, {per_page: 1})
 	show.value = tasks.length === 0
 })
 </script>
 
 <template>
 	<template v-if="show && !loading">
-		<p class="mt-4">
+		<p class="mbs-4">
 			{{ $t('home.project.importText') }}
 		</p>
 		<XButton

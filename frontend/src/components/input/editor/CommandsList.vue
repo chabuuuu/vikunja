@@ -26,15 +26,25 @@
 
 <script lang="ts">
 /* eslint-disable vue/component-api-style */
+import type {PropType} from 'vue'
+import type {IconProp} from '@fortawesome/fontawesome-svg-core'
+
+interface CommandItem {
+	icon: IconProp
+	title: string
+	description: string
+	command: () => void
+}
+
 export default {
 	props: {
 		items: {
-			type: Array,
+			type: Array as PropType<CommandItem[]>,
 			required: true,
 		},
 
 		command: {
-			type: Function,
+			type: Function as PropType<(item: CommandItem) => void>,
 			required: true,
 		},
 	},
@@ -52,7 +62,7 @@ export default {
 	},
 
 	methods: {
-		onKeyDown({event}) {
+		onKeyDown({event}: {event: KeyboardEvent}) {
 			if (event.key === 'ArrowUp') {
 				this.upHandler()
 				return true
@@ -64,6 +74,9 @@ export default {
 			}
 
 			if (event.key === 'Enter') {
+				if (event.isComposing) {
+					return false
+				}
 				this.enterHandler()
 				return true
 			}
@@ -83,7 +96,7 @@ export default {
 			this.selectItem(this.selectedIndex)
 		},
 
-		selectItem(index) {
+		selectItem(index: number) {
 			const item = this.items[index]
 
 			if (item) {
@@ -110,8 +123,8 @@ export default {
 	display: flex;
 	align-items: center;
 	margin: 0;
-	width: 100%;
-	text-align: left;
+	inline-size: 100%;
+	text-align: start;
 	background: transparent;
 	border-radius: $radius;
 	border: 0;
@@ -125,11 +138,11 @@ export default {
 	
 	> svg {
 		box-sizing: border-box;
-		width: 2rem;
-		height: 2rem;
+		inline-size: 2rem;
+		block-size: 2rem;
 		border: 1px solid var(--grey-300);
 		padding: .5rem;
-		margin-right: .5rem;
+		margin-inline-end: .5rem;
 		border-radius: $radius;
 		color: var(--grey-700);
 	}

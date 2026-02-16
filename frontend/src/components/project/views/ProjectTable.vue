@@ -12,7 +12,7 @@
 						<XButton
 							icon="th"
 							variant="secondary"
-							class="mr-2"
+							class="mie-2"
 							@click.prevent.stop="toggle()"
 						>
 							{{ $t('project.table.columns') }}
@@ -40,6 +40,9 @@
 							</FancyCheckbox>
 							<FancyCheckbox v-model="activeColumns.assignees">
 								{{ $t('task.attributes.assignees') }}
+							</FancyCheckbox>
+							<FancyCheckbox v-model="activeColumns.commentCount">
+								{{ $t('task.attributes.commentCount') }}
 							</FancyCheckbox>
 							<FancyCheckbox v-model="activeColumns.dueDate">
 								{{ $t('task.attributes.dueDate') }}
@@ -73,6 +76,7 @@
 					v-model="params"
 					:view-id="viewId"
 					:project-id="projectId"
+					@update:modelValue="taskList.loadTasks()"
 				/>
 			</div>
 		</template>
@@ -87,7 +91,7 @@
 					:has-content="false"
 				>
 					<div class="has-horizontal-overflow">
-						<table class="table has-actions is-hoverable is-fullwidth mb-0">
+						<table class="table has-actions is-hoverable is-fullwidth mbe-0">
 							<thead>
 								<tr>
 									<th v-if="activeColumns.index">
@@ -130,6 +134,9 @@
 											:order="sortBy.due_date"
 											@click="sort('due_date', $event)"
 										/>
+									</th>
+									<th v-if="activeColumns.commentCount">
+										{{ $t('task.attributes.commentCount') }}
 									</th>
 									<th v-if="activeColumns.startDate">
 										{{ $t('task.attributes.startDate') }}
@@ -200,9 +207,11 @@
 										/>
 									</td>
 									<td v-if="activeColumns.title">
-										<RouterLink :to="taskDetailRoutes[t.id]">
-											{{ t.title }}
-										</RouterLink>
+										<TaskGlanceTooltip :task="t">
+											<RouterLink :to="taskDetailRoutes[t.id]">
+												{{ t.title }}
+											</RouterLink>
+										</TaskGlanceTooltip>
 									</td>
 									<td v-if="activeColumns.priority">
 										<PriorityLabel
@@ -219,7 +228,7 @@
 											v-if="t.assignees.length > 0"
 											:assignees="t.assignees"
 											:avatar-size="28"
-											class="ml-1"
+											class="mis-1"
 											:inline="true"
 										/>
 									</td>
@@ -227,6 +236,9 @@
 										v-if="activeColumns.dueDate"
 										:date="t.dueDate"
 									/>
+									<td v-if="activeColumns.commentCount">
+										<CommentCount :task="t" />
+									</td>
 									<DateTableCell
 										v-if="activeColumns.startDate"
 										:date="t.startDate"
@@ -282,7 +294,9 @@ import Done from '@/components/misc/Done.vue'
 import User from '@/components/misc/User.vue'
 import PriorityLabel from '@/components/tasks/partials/PriorityLabel.vue'
 import Labels from '@/components/tasks/partials/Labels.vue'
+import TaskGlanceTooltip from '@/components/tasks/partials/TaskGlanceTooltip.vue'
 import DateTableCell from '@/components/tasks/partials/DateTableCell.vue'
+import CommentCount from '@/components/tasks/partials/CommentCount.vue'
 import FancyCheckbox from '@/components/input/FancyCheckbox.vue'
 import Sort from '@/components/tasks/partials/Sort.vue'
 import FilterPopup from '@/components/project/partials/FilterPopup.vue'
@@ -319,6 +333,7 @@ const ACTIVE_COLUMNS_DEFAULT = {
 	updated: false,
 	createdBy: false,
 	doneAt: false,
+	commentCount: false,
 }
 
 const SORT_BY_DEFAULT: SortBy = {
@@ -328,7 +343,12 @@ const SORT_BY_DEFAULT: SortBy = {
 const activeColumns = useStorage('tableViewColumns', {...ACTIVE_COLUMNS_DEFAULT})
 const sortBy = useStorage<SortBy>('tableViewSortBy', {...SORT_BY_DEFAULT})
 
-const taskList = useTaskList(() => props.projectId, () => props.viewId, sortBy.value)
+const taskList = useTaskList(
+	() => props.projectId, 
+	() => props.viewId, 
+	sortBy.value,
+	() => ['comment_count', 'is_unread'],
+)
 
 const {
 	loading,
@@ -338,10 +358,6 @@ const {
 	sortByParam,
 } = taskList
 const tasks: Ref<ITask[]> = taskList.tasks
-
-Object.assign(params.value, {
-	filter: '',
-})
 
 watch(
 	() => activeColumns.value,
@@ -431,6 +447,6 @@ const taskDetailRoutes = computed(() => Object.fromEntries(
 }
 
 .filter-container :deep(.popup) {
-	top: 7rem;
+	inset-block-start: 7rem;
 }
 </style>

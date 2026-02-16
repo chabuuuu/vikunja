@@ -24,13 +24,14 @@ import (
 
 	"code.vikunja.io/api/pkg/db"
 	"code.vikunja.io/api/pkg/log"
+	"code.vikunja.io/api/pkg/models"
 	"code.vikunja.io/api/pkg/modules/auth"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // ReadOneWeb is the webhandler to get one object
-func (c *WebHandler) ReadOneWeb(ctx echo.Context) error {
+func (c *WebHandler) ReadOneWeb(ctx *echo.Context) error {
 	// Get our model
 	currentStruct := c.EmptyStruct()
 
@@ -39,15 +40,15 @@ func (c *WebHandler) ReadOneWeb(ctx echo.Context) error {
 		log.Debugf("Invalid model error. Internal error was: %s", err.Error())
 		var he *echo.HTTPError
 		if errors.As(err, &he) {
-			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid model provided. Error was: %s", he.Message)).SetInternal(err)
+			return models.ErrInvalidModel{Message: fmt.Sprintf("%v", he.Message), Err: err}
 		}
-		return echo.NewHTTPError(http.StatusBadRequest, "Invalid model provided.").SetInternal(err)
+		return models.ErrInvalidModel{Err: err}
 	}
 
-	// Check rights
+	// Check permissions
 	currentAuth, err := auth.GetAuthFromClaims(ctx)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Could not determine the current user.").SetInternal(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Could not determine the current user.").Wrap(err)
 	}
 
 	// Create the db session
@@ -59,38 +60,34 @@ func (c *WebHandler) ReadOneWeb(ctx echo.Context) error {
 		}
 	}()
 
-	canRead, maxRight, err := currentStruct.CanRead(s, currentAuth)
+	canRead, maxPermission, err := currentStruct.CanRead(s, currentAuth)
 	if err != nil {
 		_ = s.Rollback()
-		return HandleHTTPError(err)
+		return err
 	}
 	if !canRead {
 		_ = s.Rollback()
-		log.Warningf("Tried to read while not having the rights for it (User: %v)", currentAuth)
-		return echo.NewHTTPError(http.StatusForbidden, "You don't have the right to see this")
+		log.Warningf("Tried to read while not having the permissions for it (User: %v)", currentAuth)
+		return echo.NewHTTPError(http.StatusForbidden, "You don't have the permission to see this")
 	}
 
 	// Get our object
 	err = currentStruct.ReadOne(s, currentAuth)
 	if err != nil {
 		_ = s.Rollback()
-		return HandleHTTPError(err)
+		return err
 	}
 
 	// Set the headers
 	if canRead {
-		ctx.Response().Header().Set("x-max-right", strconv.FormatInt(int64(maxRight), 10))
-		ctx.Response().Header().Set("Access-Control-Expose-Headers", "x-max-right")
+		ctx.Response().Header().Set("x-max-permission", strconv.FormatInt(int64(maxPermission), 10))
+		ctx.Response().Header().Set("Access-Control-Expose-Headers", "x-max-permission")
 	}
 
 	err = s.Commit()
 	if err != nil {
-		return HandleHTTPError(err)
+		return err
 	}
 
-	err = ctx.JSON(http.StatusOK, currentStruct)
-	if err != nil {
-		return HandleHTTPError(err)
-	}
-	return err
+	return ctx.JSON(http.StatusOK, currentStruct)
 }

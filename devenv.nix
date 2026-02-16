@@ -17,9 +17,13 @@ in {
     golangci-lint mage
     # Desktop
     electron
-  ] ++ lib.optionals (!pkgs.stdenv.isDarwin) [
-    # Frontend tools (exclude on Darwin)
-    cypress
+    # Font processing tools
+    wget
+    python3
+    python3Packages.pip
+    python3Packages.fonttools
+    python3Packages.brotli
+    nodejs
   ];
   
   languages = {
@@ -42,6 +46,13 @@ in {
   services.mailpit = {
     enable = true;
     package = pkgs-unstable.mailpit;
+  };
+
+  env = {
+    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1";
+    PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS = "1";
+#    PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH = "${pkgs-unstable.chromium}/bin/chromium";
+    VIKUNJA_SERVICE_TESTINGTOKEN = "test";
   };
 	
 	devcontainer = {

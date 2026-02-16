@@ -1,6 +1,10 @@
 import pluginVue from 'eslint-plugin-vue'
 import js from '@eslint/js'
 import vueTsEslintConfig from '@vue/eslint-config-typescript'
+import { fileURLToPath } from 'node:url'
+import { dirname } from 'node:path'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
 
 export default [
 	js.configs.recommended,
@@ -9,7 +13,6 @@ export default [
 	{
 		ignores: [
 			'**/*.test.ts',
-			'./cypress',
 		],
 	},
 	{
@@ -69,20 +72,11 @@ export default [
 			parserOptions: {
 				parser: '@typescript-eslint/parser',
 				ecmaVersion: 'latest',
-				tsconfigRootDir: '.',
+				tsconfigRootDir: __dirname,
 			},
 		},
 
 
-		// 'parser': 'vue-eslint-parser',
-		// 'parserOptions': {
-		// 	'parser': '@typescript-eslint/parser',
-		// 	'ecmaVersion': 'latest',
-		// 	'tsconfigRootDir': __dirname,
-		// },
-		// 'ignorePatterns': [
-		// 	'cypress/*',
-		// ],
 	},
 
 ]

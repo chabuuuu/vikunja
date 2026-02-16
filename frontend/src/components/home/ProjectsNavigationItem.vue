@@ -1,7 +1,11 @@
 <template>
 	<li
 		class="list-menu loader-container is-loading-small"
-		:class="{'is-loading': isLoading}"
+		:class="{
+			'is-loading': isLoading,
+			'is-drop-target': isDropTarget,
+		}"
+		:data-project-id="project.id"
 	>
 		<div class="navigation-item">
 			<BaseButton
@@ -14,6 +18,15 @@
 					:class="{ 'project-is-collapsed': !childProjectsOpen }"
 				/>
 			</BaseButton>
+			<span
+				v-if="canEditOrder && project.id > 0 && project.maxPermission !== null && project.maxPermission > PERMISSIONS.READ"
+				class="icon menu-item-icon handle drag-handle-standalone"
+				@mousedown.stop
+				@click.stop.prevent
+				@touchstart.stop
+			>
+				<Icon icon="grip-lines" />
+			</span>
 			<BaseButton
 				:to="{ name: 'project.index', params: { projectId: project.id} }"
 				class="list-menu-link"
@@ -23,10 +36,7 @@
 					v-if="!canCollapse || childProjects?.length === 0"
 					class="collapse-project-button-placeholder"
 				/>
-				<div
-					class="color-bubble-handle-wrapper"
-					:class="{'is-draggable': project.id > 0 && project.maxRight > RIGHTS.READ}"
-				>
+				<div class="color-bubble-wrapper">
 					<ColorBubble
 						v-if="project.hexColor !== ''"
 						:color="project.hexColor"
@@ -38,36 +48,30 @@
 					>
 						<Icon icon="filter" />
 					</span>
-					<span
-						v-if="project.id > 0 && project.maxRight > RIGHTS.READ"
-						class="icon menu-item-icon handle"
-						:class="{'has-color-bubble': project.hexColor !== ''}"
-					>
-						<Icon icon="grip-lines" />
-					</span>
 				</div>
 				<span class="project-menu-title">{{ getProjectTitle(project) }}</span>
 			</BaseButton>
 			<BaseButton
-				v-if="project.id > 0 && project.maxRight > RIGHTS.READ"
+				v-if="canToggleFavorite"
 				class="favorite"
 				:class="{'is-favorite': project.isFavorite}"
 				@click="projectStore.toggleProjectFavorite(project)"
 			>
-				<span class="tw-sr-only">{{ project.isFavorite ? $t('project.unfavorite') : $t('project.favorite') }}</span>
+				<span class="is-sr-only">{{ project.isFavorite ? $t('project.unfavorite') : $t('project.favorite') }}</span>
 				<Icon :icon="project.isFavorite ? 'star' : ['far', 'star']" />
 			</BaseButton>
 			<ProjectSettingsDropdown
-				v-if="project.maxRight > RIGHTS.READ"
+				v-if="project.maxPermission !== null && project.maxPermission > PERMISSIONS.READ"
 				class="menu-list-dropdown"
 				:project="project"
+				:simple="true"
 			>
 				<template #trigger="{toggleOpen}">
 					<BaseButton
 						class="menu-list-dropdown-trigger"
 						@click="toggleOpen"
 					>
-						<span class="tw-sr-only">{{ $t('project.openSettingsMenu') }}</span>
+						<span class="is-sr-only">{{ $t('project.openSettingsMenu') }}</span>
 						<Icon
 							icon="ellipsis-h"
 							class="icon"
@@ -86,9 +90,10 @@
 </template>
 
 <script setup lang="ts">
-import {computed} from 'vue'
+import {computed, ref, onUnmounted, watch} from 'vue'
 import {useProjectStore} from '@/stores/projects'
 import {useBaseStore} from '@/stores/base'
+import {useTaskStore} from '@/stores/tasks'
 import {useStorage} from '@vueuse/core'
 
 import type {IProject} from '@/modelTypes/IProject'
@@ -98,13 +103,64 @@ import ProjectSettingsDropdown from '@/components/project/ProjectSettingsDropdow
 import {getProjectTitle} from '@/helpers/getProjectTitle'
 import ColorBubble from '@/components/misc/ColorBubble.vue'
 import ProjectsNavigation from '@/components/home/ProjectsNavigation.vue'
-import {RIGHTS} from '@/constants/rights'
+import {PERMISSIONS} from '@/constants/permissions'
+import {isSavedFilter} from '@/services/savedFilter'
 
 const props = defineProps<{
 	project: IProject,
 	isLoading?: boolean,
 	canCollapse?: boolean,
+	canEditOrder?: boolean,
 }>()
+
+const taskStore = useTaskStore()
+const isHoveredDuringDrag = ref(false)
+
+// Track mouse position during drag to detect hover (mouseenter doesn't fire during drag)
+function handleMouseMove(e: MouseEvent) {
+	if (!taskStore.draggedTask) {
+		isHoveredDuringDrag.value = false
+		return
+	}
+
+	const elementsUnderMouse = document.elementsFromPoint(e.clientX, e.clientY)
+	const isOverThisProject = elementsUnderMouse.some(el => {
+		const projectId = (el as HTMLElement).dataset?.projectId
+		return projectId && parseInt(projectId, 10) === props.project.id
+	})
+
+	isHoveredDuringDrag.value = isOverThisProject
+}
+
+// Only add the listener when a task is being dragged
+// Use capture phase to receive events before Sortable.js can prevent them
+watch(() => taskStore.draggedTask, (draggedTask) => {
+	if (draggedTask) {
+		document.addEventListener('mousemove', handleMouseMove, true)
+		document.addEventListener('dragover', handleMouseMove, true)
+	} else {
+		document.removeEventListener('mousemove', handleMouseMove, true)
+		document.removeEventListener('dragover', handleMouseMove, true)
+		isHoveredDuringDrag.value = false
+	}
+}, {immediate: true})
+
+onUnmounted(() => {
+	document.removeEventListener('mousemove', handleMouseMove, true)
+	document.removeEventListener('dragover', handleMouseMove, true)
+})
+
+// Show drop target highlight when a task is being dragged and this project is hovered
+const isDropTarget = computed(() => {
+	if (!taskStore.draggedTask || !isHoveredDuringDrag.value) {
+		return false
+	}
+	// Highlight any valid project (not a pseudo project, has write permission)
+	// The actual drop logic will handle the case when it's the same project (no-op)
+	return props.project.id > 0
+		&& props.project.maxPermission !== null
+		&& props.project.maxPermission > PERMISSIONS.READ
+})
 
 const projectStore = useProjectStore()
 const baseStore = useBaseStore()
@@ -128,12 +184,23 @@ const childProjects = computed(() => {
 		.filter(p => !p.isArchived)
 		.sort((a, b) => a.position - b.position)
 })
+
+const canToggleFavorite = computed(() => {
+	// Allow favorite toggle for:
+	// 1. Regular projects (id > 0) with write permission
+	// 2. Saved filters (id < -1) - user owns their own filters
+	if (props.project.id === -1) return false  // Favorites pseudo-project
+	if (props.project.id > 0) {
+		return props.project.maxPermission !== null && props.project.maxPermission > PERMISSIONS.READ
+	}
+	// Saved filters (negative IDs except -1)
+	return isSavedFilter(props.project)
+})
 </script>
 
 <style lang="scss" scoped>
-.list-setting-spacer {
-	width: 5rem;
-	flex-shrink: 0;
+.list-menu {
+	transition: background-color $transition;
 }
 
 .project-is-collapsed {
@@ -155,33 +222,50 @@ const childProjects = computed(() => {
 	opacity: 1;
 }
 
-.list-menu:hover > div > a > .color-bubble-handle-wrapper.is-draggable > {
-	.saved-filter-icon,
-	.color-bubble {
-		opacity: 0;
-	}
+.list-menu:hover > div > .drag-handle-standalone {
+	opacity: 1;
+}
+
+.list-menu:hover .color-bubble-wrapper > .color-bubble {
+	opacity: 0;
 }
 
 .is-touch .color-bubble {
 	opacity: 1 !important;
 }
 
-.color-bubble-handle-wrapper {
+.color-bubble-wrapper {
 	position: relative;
-	width: 1rem;
-	height: 1rem;
+	inline-size: 1rem;
+	block-size: 1rem;
 	display: flex;
 	align-items: center;
 	justify-content: flex-start;
-	margin-right: .25rem;
+	margin-inline-end: .25rem;
 	flex-shrink: 0;
 
 	.color-bubble, .icon {
 		transition: all $transition;
 		position: absolute;
-		width: 12px;
+		inline-size: 12px;
 		margin: 0 !important;
 		padding: 0 !important;
+	}
+}
+
+.drag-handle-standalone {
+	inline-size: 1rem;
+	block-size: 1rem;
+	opacity: 0;
+	cursor: grab;
+	transition: opacity $transition;
+	z-index: 2;
+
+	position: absolute;
+	inset-inline-start: 1.75rem;
+
+	&:active {
+		cursor: grabbing;
 	}
 }
 
@@ -195,8 +279,15 @@ const childProjects = computed(() => {
 	font-size: .75rem;
 }
 
-.is-touch .handle.has-color-bubble {
-	display: none !important;
+@media (pointer: coarse) {
+	.drag-handle-standalone {
+		display: none !important;
+	}
+}
+
+.navigation-item {
+	position: relative;
+	transition: background-color $transition, box-shadow $transition;
 }
 
 .navigation-item:has(*:focus-visible) {
@@ -211,5 +302,16 @@ const childProjects = computed(() => {
 .navigation-item a:focus-visible {
 	// The focus ring is already added to the navigation-item, so we don't need to add it again.
 	box-shadow: none;
+}
+
+.is-drop-target {
+	background-color: hsla(var(--primary-hsl), 0.15);
+	border-radius: $radius;
+
+	.navigation-item {
+		background-color: hsla(var(--primary-hsl), 0.1);
+		box-shadow: inset 0 0 0 2px var(--primary);
+		border-radius: $radius;
+	}
 }
 </style>

@@ -48,8 +48,8 @@ type TaskAttachment struct {
 
 	Created time.Time `xorm:"created" json:"created"`
 
-	web.CRUDable `xorm:"-" json:"-"`
-	web.Rights   `xorm:"-" json:"-"`
+	web.CRUDable    `xorm:"-" json:"-"`
+	web.Permissions `xorm:"-" json:"-"`
 }
 
 // TableName returns the table name for task attachments
@@ -58,8 +58,7 @@ func (*TaskAttachment) TableName() string {
 }
 
 // NewAttachment creates a new task attachment
-// Note: I'm not sure if only accepting an io.ReadCloser and not an afero.File or os.File instead is a good way of doing things.
-func (ta *TaskAttachment) NewAttachment(s *xorm.Session, f io.ReadCloser, realname string, realsize uint64, a web.Auth) error {
+func (ta *TaskAttachment) NewAttachment(s *xorm.Session, f io.ReadSeeker, realname string, realsize uint64, a web.Auth) error {
 
 	// Store the file
 	file, err := files.Create(f, realname, realsize, a)
@@ -121,7 +120,17 @@ func (ta *TaskAttachment) ReadOne(s *xorm.Session, _ web.Auth) (err error) {
 	// Get the file
 	ta.File = &files.File{ID: ta.FileID}
 	err = ta.File.LoadFileMetaByID()
-	return
+	if err != nil {
+		return
+	}
+
+	// Get the creator (non-fatal if user doesn't exist)
+	ta.CreatedBy, err = user.GetUserByID(s, ta.CreatedByID)
+	if err != nil && !user.IsErrUserDoesNotExist(err) {
+		return err
+	}
+
+	return nil
 }
 
 // ReadAll returns a project with all attachments
@@ -207,18 +216,36 @@ func cacheKeyForTaskAttachmentPreview(id int64, size PreviewSize) string {
 	return "task_attachment_preview_" + strconv.FormatInt(id, 10) + "_size_" + string(size)
 }
 
-func (ta *TaskAttachment) GetPreviewFromCache(previewSize PreviewSize) []byte {
+func (ta *TaskAttachment) GetPreview(previewSize PreviewSize) []byte {
 	cacheKey := cacheKeyForTaskAttachmentPreview(ta.ID, previewSize)
 
-	var cached []byte
-	exists, err := keyvalue.GetWithValue(cacheKey, &cached)
+	result, err := keyvalue.Remember(cacheKey, func() (any, error) {
+		img, _, err := image.Decode(ta.File.File)
+		if err != nil {
+			return nil, err
+		}
 
-	// If the preview is not cached, return nil
-	if err != nil || !exists || cached == nil {
+		// Scale down the image to a minimum size
+		resizedImg := resizeImage(img, previewSize.GetSize())
+
+		// Get the raw bytes of the resized image
+		buf := &bytes.Buffer{}
+		if err := png.Encode(buf, resizedImg); err != nil {
+			return nil, err
+		}
+		previewImage, err := io.ReadAll(buf)
+		if err != nil {
+			return nil, err
+		}
+
+		log.Infof("Attachment image preview for task attachment %v of size %v created and cached", ta.ID, previewSize)
+		return previewImage, nil
+	})
+	if err != nil {
 		return nil
 	}
 
-	return cached
+	return result.([]byte)
 }
 
 type PreviewSize string
@@ -274,37 +301,6 @@ func resizeImage(img image.Image, width int) *image.NRGBA {
 	)
 
 	return resizedImg
-}
-
-func (ta *TaskAttachment) GenerateAndSavePreviewToCache(previewSize PreviewSize) []byte {
-	img, _, err := image.Decode(ta.File.File)
-	if err != nil {
-		return nil
-	}
-
-	// Scale down the image to a minimum size
-	resizedImg := resizeImage(img, previewSize.GetSize())
-
-	// Get the raw bytes of the resized image
-	buf := &bytes.Buffer{}
-	if err := png.Encode(buf, resizedImg); err != nil {
-		return nil
-	}
-	previewImage, err := io.ReadAll(buf)
-	if err != nil {
-		return nil
-	}
-
-	// Store the preview image in the cache
-	cacheKey := cacheKeyForTaskAttachmentPreview(ta.ID, previewSize)
-	err = keyvalue.Put(cacheKey, previewImage)
-	if err != nil {
-		return nil
-	}
-
-	log.Infof("Attachment image preview for task attachment %v of size %v created and cached", ta.ID, previewSize)
-
-	return previewImage
 }
 
 // Delete removes an attachment

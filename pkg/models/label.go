@@ -30,7 +30,7 @@ import (
 type Label struct {
 	// The unique, numeric id of this label.
 	ID int64 `xorm:"bigint autoincr not null unique pk" json:"id" param:"label"`
-	// The title of the lable. You'll see this one on tasks associated with it.
+	// The title of the label. You'll see this one on tasks associated with it.
 	Title string `xorm:"varchar(250) not null" json:"title" valid:"runelength(1|250)" minLength:"1" maxLength:"250"`
 	// The label description.
 	Description string `xorm:"longtext null" json:"description"`
@@ -46,8 +46,8 @@ type Label struct {
 	// A timestamp when this label was last updated. You cannot change this value.
 	Updated time.Time `xorm:"updated not null" json:"updated"`
 
-	web.CRUDable `xorm:"-" json:"-"`
-	web.Rights   `xorm:"-" json:"-"`
+	web.CRUDable    `xorm:"-" json:"-"`
+	web.Permissions `xorm:"-" json:"-"`
 }
 
 // TableName makes a pretty table name

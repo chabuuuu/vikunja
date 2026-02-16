@@ -19,6 +19,7 @@ package config
 import (
 	"crypto/rand"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path"
@@ -30,6 +31,7 @@ import (
 
 	"code.vikunja.io/api/pkg/log"
 
+	"github.com/c2h5oh/datasize"
 	"github.com/spf13/viper"
 )
 
@@ -63,6 +65,7 @@ const (
 	ServiceMaxAvatarSize                  Key = `service.maxavatarsize`
 	ServiceAllowIconChanges               Key = `service.allowiconchanges`
 	ServiceCustomLogoURL                  Key = `service.customlogourl`
+	ServiceCustomLogoURLDark              Key = `service.customlogourldark`
 	ServiceEnablePublicTeams              Key = `service.enablepublicteams`
 	ServiceBcryptRounds                   Key = `service.bcryptrounds`
 	ServiceEnableOpenIDTeamUserOnlySearch Key = `service.enableopenidteamusersearch`
@@ -137,10 +140,10 @@ const (
 	LogEnabled       Key = `log.enabled`
 	LogStandard      Key = `log.standard`
 	LogLevel         Key = `log.level`
+	LogFormat        Key = `log.format`
 	LogDatabase      Key = `log.database`
 	LogDatabaseLevel Key = `log.databaselevel`
 	LogHTTP          Key = `log.http`
-	LogEcho          Key = `log.echo`
 	LogPath          Key = `log.path`
 	LogEvents        Key = `log.events`
 	LogEventsLevel   Key = `log.eventslevel`
@@ -156,6 +159,17 @@ const (
 
 	FilesBasePath Key = `files.basepath`
 	FilesMaxSize  Key = `files.maxsize`
+	FilesType     Key = `files.type`
+
+	// S3 Configuration
+	FilesS3Endpoint       Key = `files.s3.endpoint`
+	FilesS3Bucket         Key = `files.s3.bucket`
+	FilesS3Region         Key = `files.s3.region`
+	FilesS3AccessKey      Key = `files.s3.accesskey`
+	FilesS3SecretKey      Key = `files.s3.secretkey`
+	FilesS3UsePathStyle   Key = `files.s3.usepathstyle`
+	FilesS3DisableSigning Key = `files.s3.disablesigning`
+	FilesS3TempDir        Key = `files.s3.tempdir`
 
 	MigrationTodoistEnable             Key = `migration.todoist.enable`
 	MigrationTodoistClientID           Key = `migration.todoist.clientid`
@@ -174,6 +188,7 @@ const (
 	CorsMaxAge  Key = `cors.maxage`
 
 	AvatarGravaterExpiration Key = `avatar.gravatarexpiration`
+	AvatarGravatarBaseURL    Key = `avatar.gravatarbaseurl`
 
 	BackgroundsEnabled               Key = `backgrounds.enabled`
 	BackgroundsUploadEnabled         Key = `backgrounds.providers.upload.enabled`
@@ -207,7 +222,12 @@ const (
 	AutoTLSEnabled     Key = `autotls.enabled`
 	AutoTLSEmail       Key = `autotls.email`
 	AutoTLSRenewBefore Key = `autotls.renewbefore`
+
+	PluginsEnabled Key = `plugins.enabled`
+	PluginsDir     Key = `plugins.dir`
 )
+
+var maxFileSizeInBytes uint64
 
 // GetString returns a string config value
 func (k Key) GetString() string {
@@ -400,10 +420,10 @@ func InitDefaultConfig() {
 	LogEnabled.setDefault(true)
 	LogStandard.setDefault("stdout")
 	LogLevel.setDefault("INFO")
+	LogFormat.setDefault("text")
 	LogDatabase.setDefault("off")
 	LogDatabaseLevel.setDefault("WARNING")
 	LogHTTP.setDefault("stdout")
-	LogEcho.setDefault("off")
 	LogPath.setDefault(ServiceRootpath.GetString() + "/logs")
 	LogEvents.setDefault("off")
 	LogEventsLevel.setDefault("INFO")
@@ -419,6 +439,16 @@ func InitDefaultConfig() {
 	// Files
 	FilesBasePath.setDefault("files")
 	FilesMaxSize.setDefault("20MB")
+	FilesType.setDefault("local")
+	// S3 Configuration
+	FilesS3Endpoint.setDefault("")
+	FilesS3Bucket.setDefault("")
+	FilesS3Region.setDefault("")
+	FilesS3AccessKey.setDefault("")
+	FilesS3SecretKey.setDefault("")
+	FilesS3UsePathStyle.setDefault(false)
+	FilesS3DisableSigning.setDefault(false)
+	FilesS3TempDir.setDefault("")
 	// Cors
 	CorsEnable.setDefault(true)
 	CorsOrigins.setDefault([]string{"http://127.0.0.1:*", "http://localhost:*"})
@@ -429,6 +459,7 @@ func InitDefaultConfig() {
 	MigrationMicrosoftTodoEnable.setDefault(false)
 	// Avatar
 	AvatarGravaterExpiration.setDefault(3600)
+	AvatarGravatarBaseURL.setDefault("https://www.gravatar.com")
 	// Project Backgrounds
 	BackgroundsEnabled.setDefault(true)
 	BackgroundsUploadEnabled.setDefault(true)
@@ -446,6 +477,9 @@ func InitDefaultConfig() {
 	WebhooksTimeoutSeconds.setDefault(30)
 	// AutoTLS
 	AutoTLSRenewBefore.setDefault("720h") // 30days in hours
+	// Plugins
+	PluginsEnabled.setDefault(false)
+	PluginsDir.setDefault(filepath.Join(ServiceRootpath.GetString(), "plugins"))
 }
 
 func GetConfigValueFromFile(configKey string) string {
@@ -537,7 +571,7 @@ func InitConfig() {
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
 
-	log.ConfigureLogger(LogEnabled.GetBool(), LogStandard.GetString(), LogPath.GetString(), LogLevel.GetString())
+	log.ConfigureStandardLogger(LogEnabled.GetBool(), LogStandard.GetString(), LogPath.GetString(), LogLevel.GetString(), LogFormat.GetString())
 
 	// Load the config file
 	viper.AddConfigPath(ServiceRootpath.GetString())
@@ -562,7 +596,7 @@ func InitConfig() {
 			log.Warning(err.Error())
 			log.Warning("Using default config.")
 		} else {
-			log.ConfigureLogger(LogEnabled.GetBool(), LogStandard.GetString(), LogPath.GetString(), LogLevel.GetString())
+			log.ConfigureStandardLogger(LogEnabled.GetBool(), LogStandard.GetString(), LogPath.GetString(), LogLevel.GetString(), LogFormat.GetString())
 		}
 	} else {
 		log.Info("No config file found, using default or config from environment variables.")
@@ -575,12 +609,32 @@ func InitConfig() {
 
 	readConfigValuesFromFiles()
 
+	if _, err := url.ParseRequestURI(AvatarGravatarBaseURL.GetString()); err != nil {
+		log.Fatalf("Could not parse gravatarbaseurl: %s", err)
+	}
+
+	AvatarGravatarBaseURL.Set(strings.TrimRight(AvatarGravatarBaseURL.GetString(), "/"))
+
 	if RateLimitStore.GetString() == "keyvalue" {
 		RateLimitStore.Set(KeyvalueType.GetString())
 	}
 
-	if ServicePublicURL.GetString() != "" && !strings.HasSuffix(ServicePublicURL.GetString(), "/") {
-		ServicePublicURL.Set(ServicePublicURL.GetString() + "/")
+	if CorsEnable.GetBool() && ServicePublicURL.GetString() == "" {
+		log.Fatalf("service.publicurl is required when cors.enable is true")
+	}
+
+	if ServicePublicURL.GetString() != "" {
+		if !strings.HasSuffix(ServicePublicURL.GetString(), "/") {
+			ServicePublicURL.Set(ServicePublicURL.GetString() + "/")
+		}
+
+		parsed, err := url.Parse(ServicePublicURL.GetString())
+		if err != nil {
+			log.Fatalf("Could not parse publicurl: %s", err)
+		}
+		if parsed.Scheme != "http" && parsed.Scheme != "https" {
+			log.Fatalf("service.publicurl must include http:// or https:// scheme, got: %s", ServicePublicURL.GetString())
+		}
 	}
 
 	if MigrationTodoistRedirectURL.GetString() == "" {
@@ -601,6 +655,11 @@ func InitConfig() {
 
 	publicURL := strings.TrimSuffix(ServicePublicURL.GetString(), "/")
 	CorsOrigins.Set(append(CorsOrigins.GetStringSlice(), publicURL))
+
+	err = SetMaxFileSizeMBytesFromString(FilesMaxSize.GetString())
+	if err != nil {
+		log.Fatalf("Could not parse files.maxsize: %s", err)
+	}
 }
 
 func random(length int) (string, error) {
@@ -610,4 +669,22 @@ func random(length int) (string, error) {
 	}
 
 	return fmt.Sprintf("%X", b), nil
+}
+
+func SetMaxFileSizeMBytesFromString(size string) error {
+	var maxSize datasize.ByteSize
+	err := maxSize.UnmarshalText([]byte(size))
+	if err != nil {
+		return err
+	}
+
+	maxFileSizeInBytes = uint64(maxSize.MBytes())
+	return nil
+}
+
+func GetMaxFileSizeInMBytes() uint64 {
+	if maxFileSizeInBytes == 0 {
+		return 20
+	}
+	return maxFileSizeInBytes
 }

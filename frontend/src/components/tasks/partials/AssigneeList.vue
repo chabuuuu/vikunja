@@ -34,7 +34,7 @@ defineEmits<{
 			<User
 				:key="'user'+user.id"
 				:avatar-size="avatarSize"
-				:show-username="false"
+				:show-username="true"
 				:user="user"
 				:class="{'m-2': canRemove && !disabled}"
 			/>
@@ -54,12 +54,38 @@ defineEmits<{
 .assignees-list {
 	display: flex;
 
-	&.is-inline :deep(.user) {
-		display: inline;
+	&:hover .assignee:not(:first-child) {
+		margin-inline-start: -0.5rem;
 	}
 
-	&:hover .assignee:not(:first-child) {
-		margin-left: -0.5rem;
+	// Hide usernames on desktop, show on mobile
+	:deep(.user .username) {
+		@media screen and (min-width: $tablet) {
+			display: none;
+		}
+
+	}
+
+	:deep(.user) {
+		display: flex;
+		align-content: center;
+  		align-items: center;
+  		gap: .5rem;
+	}
+
+	:deep(.user > .username) {
+		font-size: .75rem;
+	}
+
+	&.is-inline {
+		:deep(.user) {
+			display: inline;
+			text-wrap: nowrap;
+		}
+
+		:deep(.user > .username) {
+			margin-inline-start: .5rem;
+		}
 	}
 }
 
@@ -68,27 +94,26 @@ defineEmits<{
 	transition: all $transition;
 
 	&:not(:first-child) {
-		margin-left: -1rem;
+		margin-inline-start: -1rem;
 	}
 
 	:deep(.user img) {
 		border: 2px solid var(--white);
-		margin-right: 0;
+		margin-inline-end: 0;
 	}
 }
 
 .remove-assignee {
 	position: absolute;
-	top: 4px;
-	left: 2px;
+	inset-block-start: 4px;
+	inset-inline-start: 2px;
 	color: var(--danger);
 	background: var(--white);
-	padding: 0 4px;
 	display: block;
 	border-radius: 100%;
 	font-size: .75rem;
-	width: 18px;
-	height: 18px;
+	inline-size: 18px;
+	block-size: 18px;
 	z-index: 100;
 }
 </style>
